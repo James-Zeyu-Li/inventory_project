@@ -26,18 +26,20 @@ CREATE TABLE SupplierProducts (
     supplier_product_id INT PRIMARY KEY AUTO_INCREMENT,
     supplier_id INT,
     product_id INT,
+    price DECIMAL(10, 2), -- 产品价格
+    max_quantity INT, -- 最大生产数量
     FOREIGN KEY (supplier_id) REFERENCES Suppliers(supplier_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
 
 -- 产品价格
-CREATE TABLE ProductPrices (
-    product_price_id INT PRIMARY KEY AUTO_INCREMENT,
-    supplier_product_id INT,
-    min_quantity INT,
-    price DECIMAL(10, 2),
-    FOREIGN KEY (supplier_product_id) REFERENCES SupplierProducts(supplier_product_id)
-);
+-- CREATE TABLE ProductPrices (
+--     product_price_id INT PRIMARY KEY AUTO_INCREMENT,
+--     supplier_product_id INT,
+--     min_quantity INT,
+--     price DECIMAL(10, 2),
+--     FOREIGN KEY (supplier_product_id) REFERENCES SupplierProducts(supplier_product_id)
+-- );
 
 -- 客户
 CREATE TABLE Customers (
@@ -85,16 +87,6 @@ CREATE TABLE SalesOrderDetails (
     quantity INT,
     FOREIGN KEY (order_id) REFERENCES SalesOrders(order_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
-);
-
--- 生产schedule
-CREATE TABLE ProductionPlans (
-    production_plan_id INT PRIMARY KEY AUTO_INCREMENT,
-    supplier_product_id INT,
-    quantity INT,
-    scheduled_date DATE,
-    status VARCHAR(50),
-    FOREIGN KEY (supplier_product_id) REFERENCES SupplierProducts(supplier_product_id)
 );
 
 -- po 给 supplier
