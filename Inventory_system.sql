@@ -7,8 +7,7 @@ CREATE TABLE Suppliers (
     supplier_id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(255) NOT NULL,
     contact_info VARCHAR(255) NOT NULL,
-    address VARCHAR(255) NULL,
-    lead_time INT
+    address VARCHAR(255) NULL
 );
 
 -- 产品
@@ -16,30 +15,22 @@ CREATE TABLE Products (
     product_id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    safe_stock_level INT, -- 最低需要重新购入的stock值
-    healthy_stock_level INT, -- 正常需要的stock值
+    selling_price DECIMAL(10, 2), -- 售价
+    safe_stock_level INT, -- 最低需要重新购入的库存值
+    healthy_stock_level INT, -- 正常需要的库存值
     shelf_space INT
 );
 
--- SupplierProducts (关系表)
-CREATE TABLE SupplierProducts (
-    supplier_product_id INT PRIMARY KEY AUTO_INCREMENT,
+-- 目录表
+CREATE TABLE Catalog (
+    catalog_id INT PRIMARY KEY AUTO_INCREMENT,
     supplier_id INT,
     product_id INT,
-    price DECIMAL(10, 2), -- 产品价格
     max_quantity INT, -- 最大生产数量
+    price DECIMAL(10, 2), -- 价格
     FOREIGN KEY (supplier_id) REFERENCES Suppliers(supplier_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
-
--- 产品价格
--- CREATE TABLE ProductPrices (
---     product_price_id INT PRIMARY KEY AUTO_INCREMENT,
---     supplier_product_id INT,
---     min_quantity INT,
---     price DECIMAL(10, 2),
---     FOREIGN KEY (supplier_product_id) REFERENCES SupplierProducts(supplier_product_id)
--- );
 
 -- 客户
 CREATE TABLE Customers (
@@ -63,7 +54,8 @@ CREATE TABLE Inventory (
     product_id INT,
     quantity INT,
     shelf_space INT,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    catalog_id INT, -- 连接到catalog中的item价格
+	FOREIGN KEY (catalog_id) REFERENCES Catalog(catalog_id),
     FOREIGN KEY (warehouse_id) REFERENCES Warehouses(warehouse_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
@@ -75,7 +67,6 @@ CREATE TABLE SalesOrders (
     order_date DATE,
     delivery_date DATE,
     status VARCHAR(50),
-    lead_time_days INT, -- 需要么?是否可以直接使用supplier录入时的leadtime
     FOREIGN KEY (customer_id) REFERENCES Customers(customer_id)
 );
 
@@ -104,7 +95,7 @@ CREATE TABLE PurchaseOrders (
 CREATE TABLE PurchaseOrderDetails (
     pod_id INT PRIMARY KEY AUTO_INCREMENT,
     po_id INT,
-    product_id INT,
+    catalog_id INT,
     quantity INT,
     FOREIGN KEY (po_id) REFERENCES PurchaseOrders(po_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
