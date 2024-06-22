@@ -55,7 +55,7 @@ CREATE TABLE Inventory (
     quantity INT,
     shelf_space INT,
     catalog_id INT, -- 连接到catalog中的item价格
-	FOREIGN KEY (catalog_id) REFERENCES Catalog(catalog_id),
+    FOREIGN KEY (catalog_id) REFERENCES Catalog(catalog_id),
     FOREIGN KEY (warehouse_id) REFERENCES Warehouses(warehouse_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
@@ -77,7 +77,7 @@ CREATE TABLE SalesOrderDetails (
     order_id INT,
     product_id INT,
     quantity INT,
-    price_for_product,
+    price_for_product INT,
     FOREIGN KEY (order_id) REFERENCES SalesOrders(order_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
