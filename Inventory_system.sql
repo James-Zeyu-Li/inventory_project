@@ -118,6 +118,14 @@ CREATE TABLE WarehouseTransfers (
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
 
+-- All alerts
+CREATE TABLE Alerts (
+    alert_id INT PRIMARY KEY AUTO_INCREMENT,
+    entity_type VARCHAR(50),
+    entity_id INT,
+    message VARCHAR(1000),
+    alert_date DATETIME
+);
 
 USE inventory_mgmt;
 
