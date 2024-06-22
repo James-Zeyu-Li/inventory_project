@@ -805,3 +805,28 @@ INSERT INTO PurchaseOrderDetails (pod_id, po_id, catalog_id, quantity, cost_for_
 (84, 33, 7, 55, 24750),-- Supplier 3, Tablet x55, cost: 450 each
 (85, 33, 8, 40, 16000),-- Supplier 3, Smartwatch x40, cost: 400 each
 (86, 33, 9, 30, 18750);-- Supplier 3, Digital Camera x30, cost: 625 each
+
+
+-- 插入20条假数据到WarehouseTransfers表
+
+INSERT INTO WarehouseTransfers (from_warehouse_id, to_warehouse_id, product_id, quantity, transfer_date, status) VALUES
+(1, 2, 1, 10, '2024-02-01', 'Completed'),
+(2, 1, 5, 20, '2024-02-05', 'Completed'),
+(1, 3, 10, 15, '2024-02-10', 'Pending'),
+(3, 1, 12, 5, '2024-02-15', 'Completed'),
+(2, 3, 15, 12, '2024-02-20', 'Pending'),
+(3, 2, 20, 18, '2024-02-25', 'Completed'),
+(1, 2, 25, 11, '2024-03-01', 'Completed'),
+(2, 1, 30, 22, '2024-03-05', 'Completed'),
+(1, 3, 35, 16, '2024-03-10', 'Pending'),
+(3, 1, 40, 6, '2024-03-15', 'Completed'),
+(2, 3, 45, 13, '2024-03-20', 'Pending'),
+(3, 2, 50, 19, '2024-03-25', 'Completed'),
+(1, 2, 2, 1, '2024-04-01', 'Completed'),
+(2, 1, 4, 3, '2024-04-05', 'Completed'),
+(1, 3, 6, 7, '2024-04-10', 'Pending'),
+(3, 1, 8, 7, '2024-04-15', 'Completed'),
+(2, 3, 14, 14, '2024-04-20', 'Pending'),
+(3, 2, 22, 20, '2024-04-25', 'Completed'),
+(1, 2, 29, 13, '2024-05-01', 'Completed'),
+(2, 1, 31, 24, '2024-05-05', 'Completed');
