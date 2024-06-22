@@ -111,7 +111,32 @@ END //
 DELIMITER ;
 
 
+-- Liuyi 
+-- 10. 找出库存低于安全库存水平的产品，以便及时补货: 
 
+DELIMITER //
+USE inventory_mgmt;
+CREATE PROCEDURE GetLowStockProducts()
+BEGIN
+    SELECT
+        P.product_id,
+        P.name AS product_name,
+        P.safe_stock_level,
+        SUM(I.quantity) AS current_stock,
+        (P.safe_stock_level - SUM(I.quantity)) AS stock_deficit
+    FROM
+        Products P
+    LEFT JOIN
+        Inventory I ON P.product_id = I.product_id
+    GROUP BY
+        P.product_id, P.name, P.safe_stock_level
+    HAVING
+        current_stock < P.safe_stock_level;
+END //
+
+DELIMITER ;
+
+CALL GetLowStockProducts();
 
 
 
