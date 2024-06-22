@@ -1,0 +1,19 @@
+
+TY  - JOUR
+AU  - Zhang, Ruifeng
+AU  - Zhou, Xiaoyan
+AU  - Jin, Yanfeng
+AU  - Li, Jing
+C7  - 2076591
+TI  - Research on Intelligent Warehousing and Logistics Management System of Electronic Market Based on Machine Learning
+JO  - Computational Intelligence and Neuroscience
+JA  - Comput Intell and Neurosc
+VL  - 2022
+IS  - 1
+SN  - 1687-5265
+UR  - https://doi.org/10.1155/2022/2076591
+DO  - https://doi.org/10.1155/2022/2076591
+SP  - 2076591
+PY  - 2022
+AB  - This study applies the Internet of things information-aware technology to the process of electronic market warehousing and logistics management, effectively perceives warehouse electronic product logistics information, and improves the real-time perception of electronic product logistics information and the efficiency of electronic product storage logistics management. This study first analyzes the needs of the intelligent electronic market warehouse logistics management system and then builds the IoT architecture of the intelligent warehouse logistics assembly logistics management system for electronic warehouses based on machine learning algorithms, which solves the problems that exist in the current workshop electronic market warehouse logistics management. Then, the principle of RFID technology is introduced. The accuracy of RFID tag estimation is analyzed by the PEPC tag estimation algorithm. It is concluded that the PEPC tag estimation algorithm reduces the tag estimation error and improves the accuracy of tag estimation. Finally, an intelligent warehousing logistics management system based on IoT RFID technology is established. The test results show that the system can meet the requirements of intelligent warehousing function in the electronic market, which will greatly improve the warehousing efficiency of electronic products.
+ER  - 
