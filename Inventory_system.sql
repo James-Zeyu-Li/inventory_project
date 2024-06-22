@@ -65,6 +65,7 @@ CREATE TABLE SalesOrders (
     order_id INT PRIMARY KEY AUTO_INCREMENT,
     customer_id INT,
     order_date DATE,
+    total_price INT,
     delivery_date DATE,
     status VARCHAR(50),
     FOREIGN KEY (customer_id) REFERENCES Customers(customer_id)
@@ -76,6 +77,7 @@ CREATE TABLE SalesOrderDetails (
     order_id INT,
     product_id INT,
     quantity INT,
+    price_for_product,
     FOREIGN KEY (order_id) REFERENCES SalesOrders(order_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
