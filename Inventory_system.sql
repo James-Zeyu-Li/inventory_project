@@ -65,7 +65,7 @@ CREATE TABLE SalesOrders (
     order_id INT PRIMARY KEY AUTO_INCREMENT,
     customer_id INT,
     order_date DATE,
-    total_price INT,
+    total_price DECIMAL(10, 2),
     delivery_date DATE,
     status VARCHAR(50),
     FOREIGN KEY (customer_id) REFERENCES Customers(customer_id)
@@ -77,7 +77,7 @@ CREATE TABLE SalesOrderDetails (
     order_id INT,
     product_id INT,
     quantity INT,
-    price_for_product INT,
+    price_for_product DECIMAL(10, 2),
     FOREIGN KEY (order_id) REFERENCES SalesOrders(order_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
@@ -89,7 +89,7 @@ CREATE TABLE PurchaseOrders (
     order_date DATE,
     expected_delivery_date DATE,
     status VARCHAR(50),
-    total_cost INT,
+    total_cost DECIMAL(10, 2),
     FOREIGN KEY (supplier_id) REFERENCES Suppliers(supplier_id)
 );
 
@@ -100,7 +100,7 @@ CREATE TABLE PurchaseOrderDetails (
     po_id INT,
     catalog_id INT,
     quantity INT,
-    cost_for_product INT,
+    cost_for_product DECIMAL(10, 2),
     FOREIGN KEY (po_id) REFERENCES PurchaseOrders(po_id),
     FOREIGN KEY (catalog_id) REFERENCES Catalog(catalog_id)
 );
