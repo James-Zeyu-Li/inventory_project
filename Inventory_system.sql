@@ -85,6 +85,7 @@ CREATE TABLE SalesOrderDetails (
 -- po 给 supplier
 CREATE TABLE PurchaseOrders (
     po_id INT PRIMARY KEY AUTO_INCREMENT,
+    supplier_id INT, 
     order_date DATE,
     expected_delivery_date DATE,
     status VARCHAR(50),
