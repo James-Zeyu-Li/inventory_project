@@ -24,7 +24,7 @@ BEGIN
     ORDER BY price
     LIMIT 1;
     
-    -- list all result in temperary chart
+    -- list all result in temperary chart sort by price
     CREATE TEMPORARY TABLE TempSuppliers AS
     SELECT supplier_id, catalog_id, price, max_quantity
     FROM Catalog
@@ -42,7 +42,6 @@ END//
 -- Compare the new total capacity with the warehouse capacity.
 -- Trigger an alert and prevent the PO from being created if the capacity is exceeded. Add to alert chart.
 -- if one warehouse can take partial, check if other warehouse has capability to take other parts. 
-
 DELIMITER //
 CREATE PROCEDURE create_purchase_order(
     IN product_id_var INT,
@@ -212,7 +211,6 @@ END//
 DELIMITER ;
 
 
-
 -- 测试1：库存足够的情况
 CALL create_purchase_order(1, 10); 
 -- 预期结果：PO 成功创建，库存更新，警报记录成功的 PO 创建
@@ -244,6 +242,128 @@ SELECT * FROM Inventory WHERE product_id = 1;
 
 -- 验证 Alerts 表
 SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
+
+
+
+-- Zeyu
+-- Average price for all invneotry we have about a product
+-- 创建一个临时表来保存每个产品的总成本和总数量
+DROP PROCEDURE IF EXISTS calculate_average_price_per_product;
+DELIMITER //
+
+CREATE PROCEDURE calculate_average_price_per_product(IN product_id_var INT)
+item_exist: BEGIN
+    DECLARE product_exists INT;
+
+    -- Check if the product exists
+    SELECT COUNT(*) INTO product_exists
+    FROM Products
+    WHERE product_id = product_id_var;
+
+    -- If the product does not exist, insert an alert and exit
+    IF product_exists = 0 THEN
+        INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
+        VALUES ('Product', product_id_var, CONCAT('Alert: Product ID ', product_id_var, ' does not exist.'), NOW());
+        LEAVE item_exist;
+    END IF;
+
+    -- 创建临时表来保存每个产品的总成本和总数量
+    CREATE TEMPORARY TABLE TempProductCosts AS
+    SELECT 
+        i.product_id,
+        SUM(i.quantity * c.price) AS total_cost,
+        SUM(i.quantity) AS total_quantity
+    FROM 
+        Inventory i
+    JOIN 
+        Catalog c ON i.catalog_id = c.catalog_id
+    WHERE 
+        i.product_id = product_id_var
+    GROUP BY 
+        i.product_id;
+
+    -- 计算每个产品的平均购入价格并显示
+    SELECT 
+        p.product_id,
+        p.name,
+        CASE 
+            WHEN t.total_quantity > 0 THEN t.total_cost / t.total_quantity 
+            ELSE 0 
+        END AS average_purchase_price
+    FROM 
+        Products p
+    LEFT JOIN 
+        TempProductCosts t ON p.product_id = t.product_id
+    WHERE 
+        p.product_id = product_id_var;
+
+    -- 清除临时表
+    DROP TEMPORARY TABLE TempProductCosts;
+END//
+DELIMITER ;
+
+-- 调用存储过程示例
+CALL calculate_average_price_per_product();
+
+
+DROP PROCEDURE IF EXISTS calculate_average_price_per_product;
+DELIMITER //
+
+CREATE PROCEDURE calculate_average_price_per_product(IN product_id_var INT)
+BEGIN
+    DECLARE product_exists INT;
+
+    -- Check if the product exists
+    SELECT COUNT(*) INTO product_exists
+    FROM Products
+    WHERE product_id = product_id_var;
+
+    -- If the product does not exist, insert an alert and exit
+    IF product_exists = 0 THEN
+        INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
+        VALUES ('Product', product_id_var, CONCAT('Alert: Product ID ', product_id_var, ' does not exist.'), NOW());
+        LEAVE average_price_block;
+    END IF;
+
+    -- 创建临时表来保存每个产品的总成本和总数量
+    CREATE TEMPORARY TABLE TempProductCosts AS
+    SELECT 
+        i.product_id,
+        SUM(i.quantity * c.price) AS total_cost,
+        SUM(i.quantity) AS total_quantity
+    FROM 
+        Inventory i
+    JOIN 
+        Catalog c ON i.catalog_id = c.catalog_id
+    WHERE 
+        i.product_id = product_id_var
+    GROUP BY 
+        i.product_id;
+
+    -- 计算每个产品的平均购入价格并显示
+    SELECT 
+        p.product_id,
+        p.name,
+        CASE 
+            WHEN t.total_quantity > 0 THEN t.total_cost / t.total_quantity 
+            ELSE 0 
+        END AS average_purchase_price
+    FROM 
+        Products p
+    LEFT JOIN 
+        TempProductCosts t ON p.product_id = t.product_id
+    WHERE 
+        p.product_id = product_id_var;
+
+    -- 清除临时表
+    DROP TEMPORARY TABLE TempProductCosts;
+END//
+DELIMITER ;
+
+-- 调用存储过程示例
+CALL calculate_average_price_per_product(1);
+
+
 
 
 
