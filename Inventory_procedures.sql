@@ -367,120 +367,174 @@ DELIMITER ;
 CALL Get_Product_Inventory_Details(1);
 
 
+
+
 -- 6: When sales order being create, subtract the amount from the inventory
 -- if all inventories from all warehouses can't fufill the SO requests, send system alert.
+
 DROP PROCEDURE IF EXISTS process_sales_order;
 
 DELIMITER //
-CREATE PROCEDURE process_sales_order(
-    IN order_id INT,
-    IN product_id INT,
-    IN order_quantity INT,
-    OUT alert_message VARCHAR(1000)
+
+CREATE PROCEDURE process_sales_order (
+    IN p_order_id INT,
+    IN p_product_id INT,
+    IN p_quantity INT
 )
 BEGIN
-    DECLARE total_available_quantity INT DEFAULT 0;
-    DECLARE remaining_quantity INT;
-    DECLARE warehouse_id INT;
-    DECLARE warehouse_quantity INT;
+    DECLARE v_safe_stock_level INT;
+    DECLARE v_healthy_stock_level INT;
+    DECLARE v_total_stock INT DEFAULT 0;
+    DECLARE v_needed_quantity INT;
+    DECLARE v_inventory_id INT;
+    DECLARE v_current_stock INT;
     DECLARE done INT DEFAULT 0;
-
-    DECLARE warehouse_cursor CURSOR FOR 
-        SELECT warehouse_id, quantity 
-        FROM Inventory 
-        WHERE product_id = product_id 
-        ORDER BY quantity DESC;
-
+    
+    DECLARE warehouse_cursor CURSOR FOR
+        SELECT inventory_id, quantity FROM Inventory WHERE product_id = p_product_id;
+    
+    DECLARE below_safe_stock_cursor CURSOR FOR
+        SELECT inventory_id, quantity FROM Inventory WHERE product_id = p_product_id AND quantity < v_safe_stock_level;
+    
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
 
-    SET remaining_quantity = order_quantity;
+    -- Get safe and healthy stock levels
+    SELECT safe_stock_level, healthy_stock_level INTO v_safe_stock_level, v_healthy_stock_level 
+    FROM Products WHERE product_id = p_product_id;
 
-    -- Calculate total available quantity across all warehouses
-    SELECT SUM(quantity) INTO total_available_quantity
-    FROM Inventory
-    WHERE product_id = product_id;
+    -- Get total stock for the product
+    SELECT SUM(quantity) INTO v_total_stock FROM Inventory WHERE product_id = p_product_id;
 
-    -- Check if total available quantity is sufficient
-    IF total_available_quantity < order_quantity THEN
-        -- If not sufficient, create an alert
-        SET alert_message = CONCAT('Warning: Total available stock for Product ID ', product_id, ' is insufficient for the order of ', order_quantity, ' units.');
+    -- Check if total stock is enough to fulfill the order
+    IF v_total_stock < p_quantity THEN
+        -- Insert alert
         INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
-        VALUES ('SalesOrder', order_id, alert_message, NOW());
+        VALUES ('Product', p_product_id, CONCAT('Insufficient stock for product ', p_product_id, ' to fulfill sales order ', p_order_id), NOW());
     ELSE
-        -- If sufficient, proceed to update inventory
+        -- Loop through warehouses to fulfill the order
+        SET v_needed_quantity = p_quantity;
         OPEN warehouse_cursor;
 
-        inventory_update: LOOP
-            FETCH warehouse_cursor INTO warehouse_id, warehouse_quantity;
+        read_loop: LOOP
+            FETCH warehouse_cursor INTO v_inventory_id, v_current_stock;
             IF done THEN
-                LEAVE inventory_update;
+                LEAVE read_loop;
             END IF;
 
-            IF warehouse_quantity >= remaining_quantity THEN
-                -- If current warehouse can fulfill the remaining quantity
-                UPDATE Inventory
-                SET quantity = quantity - remaining_quantity
-                WHERE product_id = product_id AND warehouse_id = warehouse_id;
-                SET remaining_quantity = 0;
-                LEAVE inventory_update;
+            IF v_current_stock >= v_needed_quantity THEN
+                -- Update inventory
+                UPDATE Inventory SET quantity = quantity - v_needed_quantity 
+                WHERE inventory_id = v_inventory_id;
+
+                SET v_needed_quantity = 0;
+                LEAVE read_loop;
             ELSE
-                -- If current warehouse cannot fulfill the remaining quantity
-                UPDATE Inventory
-                SET quantity = 0
-                WHERE product_id = product_id AND warehouse_id = warehouse_id;
-                SET remaining_quantity = remaining_quantity - warehouse_quantity;
+                -- Update inventory and reduce needed quantity
+                UPDATE Inventory SET quantity = 0 
+                WHERE inventory_id = v_inventory_id;
+
+                SET v_needed_quantity = v_needed_quantity - v_current_stock;
             END IF;
         END LOOP;
 
         CLOSE warehouse_cursor;
 
-        -- Confirm that the order can be processed
-        SET alert_message = 'Order processed successfully.';
+        -- Reset done flag
+        SET done = 0;
+
+        -- Check if stock level falls below safe stock level in any inventory item
+        OPEN below_safe_stock_cursor;
+
+        read_loop: LOOP
+            FETCH below_safe_stock_cursor INTO v_inventory_id, v_current_stock;
+            IF done THEN
+                LEAVE read_loop;
+            END IF;
+
+            -- Insert alert
+            INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
+            VALUES ('Product', p_product_id, CONCAT('Stock level for product ', p_product_id, ' in inventory ID ', v_inventory_id, ' has fallen below the safety stock level.'), NOW());
+
+            -- Suggest a purchase order to bring stock level back to healthy stock level
+            INSERT INTO PurchaseOrders (supplier_id, order_date, expected_delivery_date, status, total_cost)
+            SELECT supplier_id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Pending', (v_healthy_stock_level - v_current_stock) * price
+            FROM Catalog
+            JOIN Products ON Catalog.product_id = Products.product_id
+            WHERE Products.product_id = p_product_id
+            LIMIT 1;
+
+            -- Insert purchase order details
+            INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
+            SELECT LAST_INSERT_ID(), Catalog.catalog_id, (v_healthy_stock_level - v_current_stock), Catalog.price
+            FROM Catalog
+            JOIN Products ON Catalog.product_id = Products.product_id
+            WHERE Products.product_id = p_product_id
+            LIMIT 1;
+        END LOOP;
+
+        CLOSE below_safe_stock_cursor;
     END IF;
-END//
+END //
 
 DELIMITER ;
 
+-- 6: alert if Inventory is not enough for SO
+DROP TRIGGER IF EXISTS trg_after_insert_sales_order_details;
 
+DELIMITER //
 
+CREATE TRIGGER trg_after_insert_sales_order_details
+AFTER INSERT ON SalesOrderDetails
+FOR EACH ROW
+BEGIN
+    CALL process_sales_order(NEW.order_id, NEW.product_id, NEW.quantity);
+END //
 
-
+DELIMITER ;
 
 
 
 
 -- 7: alert if Sales order brings the stock level less than safety stock
--- generate a purchase order with detail which bring the  stock level back to healthy stock waiting for confirmation. 
-
--- check stock level
+-- generate a purchase order suggesstion which bring the stock level back to healthy stock
+drop trigger if exists after_inventory_update;
 DELIMITER //
 
-CREATE PROCEDURE check_stock_level(
-    IN p_product_id INT,
-    IN p_current_quantity INT,
-    OUT p_needs_reorder BOOLEAN,
-    OUT p_message VARCHAR(255)
-)
+CREATE TRIGGER after_inventory_update
+AFTER UPDATE ON Inventory
+FOR EACH ROW
 BEGIN
-    DECLARE safe_stock_level_var INT;
-    
-    SELECT safe_stock_level INTO v_safe_stock_level
-    FROM Products 
-    WHERE product_id = p_product_id;
+    DECLARE v_safe_stock_level INT;
+    DECLARE v_healthy_stock_level INT;
 
-    IF v_safe_stock_level IS NULL THEN
-        SET p_needs_reorder = FALSE;
-        SET p_message = 'Product not found';
-    ELSEIF p_current_quantity < v_safe_stock_level THEN
-        SET p_needs_reorder = TRUE;
-        SET p_message = 'Stock level below safe level';
-    ELSE
-        SET p_needs_reorder = FALSE;
-        SET p_message = 'Stock level adequate';
+    -- 获取安全库存和健康库存水平
+    SELECT safe_stock_level, healthy_stock_level INTO v_safe_stock_level, v_healthy_stock_level 
+    FROM Products WHERE product_id = NEW.product_id;
+
+    -- 检查是否低于安全库存
+    IF NEW.quantity < v_safe_stock_level THEN
+        -- 插入警报
+        INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
+        VALUES ('Product', NEW.product_id, CONCAT('Stock level for product ', NEW.product_id, ' has fallen below the safety stock level.'), NOW());
+
+        -- 建议采购订单以恢复到健康库存水平
+        INSERT INTO PurchaseOrders (supplier_id, order_date, expected_delivery_date, status, total_cost)
+        SELECT supplier_id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Pending', (v_healthy_stock_level - NEW.quantity) * price
+        FROM Catalog
+        WHERE product_id = NEW.product_id
+        LIMIT 1;
+
+        -- 插入采购订单详情
+        INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
+        SELECT LAST_INSERT_ID(), catalog_id, (v_healthy_stock_level - NEW.quantity), price
+        FROM Catalog
+        WHERE product_id = NEW.product_id
+        LIMIT 1;
     END IF;
 END //
 
 DELIMITER ;
+
 
 
 
