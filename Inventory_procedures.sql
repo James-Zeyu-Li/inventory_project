@@ -3,9 +3,8 @@ USE inventory_mgmt;
 DROP PROCEDURE IF EXISTS create_purchase_order;
 DROP PROCEDURE IF EXISTS find_cheapest_suppliers;
 
--- Zeyu Li
--- 1: find cheapest supplier
 
+-- 1: find cheapest supplier
 DELIMITER //
 CREATE PROCEDURE find_cheapest_suppliers(
     IN product_id INT,
@@ -33,7 +32,6 @@ BEGIN
 END//
 
 
--- Zeyu Li
 -- 2: check if inventory after PO will be larger than warehouse capacity
 -- if after PO the capacity is larger than the all warehouse capacity
 -- Check the warehouse capacity.
@@ -280,7 +278,7 @@ END//
 DELIMITER ;
 
 
--- Zeyu
+-- 3: average price per prodict among all warehouses. Take paramenter product ID to calculate for that product.
 DROP PROCEDURE IF EXISTS calculate_average_price_per_product;
 DELIMITER //
 
@@ -339,13 +337,11 @@ CALL calculate_average_price_per_product(1);
 
 
 
-
--- Zeyu Li 
 -- 4: 做一个query 显示现在的inventory对应的product 的数量, from 哪个supplier, 价格是多少, parameter product id
-DROP PROCEDURE IF EXISTS GetProductInventoryDetails;
+DROP PROCEDURE IF EXISTS Get_Product_Inventory_Details;
 DELIMITER //
 
-CREATE PROCEDURE GetProductInventoryDetails(IN product_id_var INT)
+CREATE PROCEDURE Get_Product_Inventory_Details(IN product_id_var INT)
 BEGIN
     -- 查询指定产品在当前库存中的数量、供应商及其价格
     SELECT 
@@ -368,7 +364,82 @@ END//
 DELIMITER ;
 
 -- 调用存储过程示例
-CALL GetProductInventoryDetails(1);
+CALL Get_Product_Inventory_Details(1);
+
+
+-- 6: When sales order being create, subtract the amount from the inventory
+-- if all inventories from all warehouses can't fufill the SO requests, send system alert.
+DROP PROCEDURE IF EXISTS process_sales_order;
+
+DELIMITER //
+CREATE PROCEDURE process_sales_order(
+    IN order_id INT,
+    IN product_id INT,
+    IN order_quantity INT,
+    OUT alert_message VARCHAR(1000)
+)
+BEGIN
+    DECLARE total_available_quantity INT DEFAULT 0;
+    DECLARE remaining_quantity INT;
+    DECLARE warehouse_id INT;
+    DECLARE warehouse_quantity INT;
+    DECLARE done INT DEFAULT 0;
+
+    DECLARE warehouse_cursor CURSOR FOR 
+        SELECT warehouse_id, quantity 
+        FROM Inventory 
+        WHERE product_id = product_id 
+        ORDER BY quantity DESC;
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+    SET remaining_quantity = order_quantity;
+
+    -- Calculate total available quantity across all warehouses
+    SELECT SUM(quantity) INTO total_available_quantity
+    FROM Inventory
+    WHERE product_id = product_id;
+
+    -- Check if total available quantity is sufficient
+    IF total_available_quantity < order_quantity THEN
+        -- If not sufficient, create an alert
+        SET alert_message = CONCAT('Warning: Total available stock for Product ID ', product_id, ' is insufficient for the order of ', order_quantity, ' units.');
+        INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
+        VALUES ('SalesOrder', order_id, alert_message, NOW());
+    ELSE
+        -- If sufficient, proceed to update inventory
+        OPEN warehouse_cursor;
+
+        inventory_update: LOOP
+            FETCH warehouse_cursor INTO warehouse_id, warehouse_quantity;
+            IF done THEN
+                LEAVE inventory_update;
+            END IF;
+
+            IF warehouse_quantity >= remaining_quantity THEN
+                -- If current warehouse can fulfill the remaining quantity
+                UPDATE Inventory
+                SET quantity = quantity - remaining_quantity
+                WHERE product_id = product_id AND warehouse_id = warehouse_id;
+                SET remaining_quantity = 0;
+                LEAVE inventory_update;
+            ELSE
+                -- If current warehouse cannot fulfill the remaining quantity
+                UPDATE Inventory
+                SET quantity = 0
+                WHERE product_id = product_id AND warehouse_id = warehouse_id;
+                SET remaining_quantity = remaining_quantity - warehouse_quantity;
+            END IF;
+        END LOOP;
+
+        CLOSE warehouse_cursor;
+
+        -- Confirm that the order can be processed
+        SET alert_message = 'Order processed successfully.';
+    END IF;
+END//
+
+DELIMITER ;
 
 
 
@@ -378,10 +449,7 @@ CALL GetProductInventoryDetails(1);
 
 
 
-
-
--- Zeyu Li
--- alert if Sales order brings the stock level less than safety stock
+-- 7: alert if Sales order brings the stock level less than safety stock
 -- generate a purchase order with detail which bring the  stock level back to healthy stock waiting for confirmation. 
 
 -- check stock level
