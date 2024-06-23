@@ -245,9 +245,42 @@ SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
 
 
 
+-- trigger, if PO contains products that is not in the product list warning, item not in product list
+-- if in product list but not in inventory list, add to inventory list.
+-- 还未检测
+drop trigger if exists trg_after_insert_purchase_order_details;
+DELIMITER //
+
+-- 创建新的触发器
+CREATE TRIGGER trg_after_insert_purchase_order_details
+AFTER INSERT ON PurchaseOrderDetails
+FOR EACH ROW
+BEGIN
+    DECLARE product_id_var INT;
+    DECLARE warehouse_id_var INT;
+
+    -- 获取 product_id
+    SELECT product_id INTO product_id_var
+    FROM Catalog
+    WHERE catalog_id = NEW.catalog_id;
+
+    -- 获取 warehouse_id
+    SELECT warehouse_id INTO warehouse_id_var
+    FROM PurchaseOrders
+    WHERE po_id = NEW.po_id;
+
+    -- 检查产品是否在指定仓库的 Inventory 表中
+    IF NOT EXISTS (SELECT 1 FROM Inventory WHERE product_id = product_id_var AND warehouse_id = warehouse_id_var) THEN
+        -- 将产品添加到 Inventory 表中
+        INSERT INTO Inventory (warehouse_id, product_id, quantity, shelf_space, catalog_id)
+        VALUES (warehouse_id_var, product_id_var, NEW.quantity, 
+                (SELECT shelf_space FROM Products WHERE product_id = product_id_var), NEW.catalog_id);
+    END IF;
+END//
+DELIMITER ;
+
+
 -- Zeyu
--- Average price for all invneotry we have about a product
--- 创建一个临时表来保存每个产品的总成本和总数量
 DROP PROCEDURE IF EXISTS calculate_average_price_per_product;
 DELIMITER //
 
@@ -302,66 +335,43 @@ item_exist: BEGIN
 END//
 DELIMITER ;
 
--- 调用存储过程示例
-CALL calculate_average_price_per_product();
+CALL calculate_average_price_per_product(1);
 
 
-DROP PROCEDURE IF EXISTS calculate_average_price_per_product;
+
+
+-- Zeyu Li 
+-- 4: 做一个query 显示现在的inventory对应的product 的数量, from 哪个supplier, 价格是多少, parameter product id
+DROP PROCEDURE IF EXISTS GetProductInventoryDetails;
 DELIMITER //
 
-CREATE PROCEDURE calculate_average_price_per_product(IN product_id_var INT)
+CREATE PROCEDURE GetProductInventoryDetails(IN product_id_var INT)
 BEGIN
-    DECLARE product_exists INT;
-
-    -- Check if the product exists
-    SELECT COUNT(*) INTO product_exists
-    FROM Products
-    WHERE product_id = product_id_var;
-
-    -- If the product does not exist, insert an alert and exit
-    IF product_exists = 0 THEN
-        INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
-        VALUES ('Product', product_id_var, CONCAT('Alert: Product ID ', product_id_var, ' does not exist.'), NOW());
-        LEAVE average_price_block;
-    END IF;
-
-    -- 创建临时表来保存每个产品的总成本和总数量
-    CREATE TEMPORARY TABLE TempProductCosts AS
+    -- 查询指定产品在当前库存中的数量、供应商及其价格
     SELECT 
         i.product_id,
-        SUM(i.quantity * c.price) AS total_cost,
-        SUM(i.quantity) AS total_quantity
+        p.name AS product_name,
+        s.name AS supplier_name,
+        i.quantity,
+        c.price
     FROM 
         Inventory i
     JOIN 
         Catalog c ON i.catalog_id = c.catalog_id
+    JOIN 
+        Suppliers s ON c.supplier_id = s.supplier_id
+    JOIN 
+        Products p ON i.product_id = p.product_id
     WHERE 
-        i.product_id = product_id_var
-    GROUP BY 
-        i.product_id;
-
-    -- 计算每个产品的平均购入价格并显示
-    SELECT 
-        p.product_id,
-        p.name,
-        CASE 
-            WHEN t.total_quantity > 0 THEN t.total_cost / t.total_quantity 
-            ELSE 0 
-        END AS average_purchase_price
-    FROM 
-        Products p
-    LEFT JOIN 
-        TempProductCosts t ON p.product_id = t.product_id
-    WHERE 
-        p.product_id = product_id_var;
-
-    -- 清除临时表
-    DROP TEMPORARY TABLE TempProductCosts;
+        i.product_id = product_id_var;
 END//
 DELIMITER ;
 
 -- 调用存储过程示例
-CALL calculate_average_price_per_product(1);
+CALL GetProductInventoryDetails(1);
+
+
+
 
 
 
