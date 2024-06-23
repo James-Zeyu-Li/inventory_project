@@ -733,7 +733,7 @@ BEGIN
         P.name AS product_name,
         P.safe_stock_level,
         SUM(I.quantity) AS current_stock,
-        (P.safe_stock_level - SUM(I.quantity)) AS stock_deficit
+        (P.safe_stock_level - SUM(I.quantity)) AS restock_needed
     FROM
         Products P
     LEFT JOIN
@@ -750,10 +750,10 @@ CALL GetLowStockProducts();
 
 -- Expected Output:
 -- A list of products with their current stock levels below the safe stock level. The output should include
--- the product ID, product name, safe stock level, current stock, and stock deficit for each product.
+-- the product ID, product name, safe stock level, current stock, and restock amount needed for each product.
 
 -- 10. Report monthly inventory changes by warehouse
-DROP PROCEDURE IF EXISTS MonthlyInventoryChanges
+DROP PROCEDURE IF EXISTS MonthlyInventoryChanges;
 
 DELIMITER //
 
@@ -762,7 +762,7 @@ BEGIN
     SELECT 
         i.warehouse_id,
         i.product_id,
-        DATE_FORMAT(t.transfer_date, '%Y-%m') AS month_year,
+        DATE_FORMAT(t.transfer_date, '%Y-%m') AS month_and_year,
         COALESCE(SUM(CASE 
             WHEN t.from_warehouse_id = i.warehouse_id THEN -t.quantity
             WHEN t.to_warehouse_id = i.warehouse_id THEN t.quantity
@@ -773,11 +773,11 @@ BEGIN
     LEFT JOIN 
         WarehouseTransfers t ON i.product_id = t.product_id 
     GROUP BY 
-        i.warehouse_id, i.product_id, month_year
+        1,2,3
     HAVING 
         quantity_change <> 0
     ORDER BY 
-        i.warehouse_id, i.product_id, month_year;
+        1,2,3;
 END //
 
 DELIMITER ;
@@ -789,9 +789,9 @@ CALL MonthlyInventoryChanges();
 -- warehouse ID, product ID, month and year, and the quantity change for each product in each warehouse.
 
 -- 11. Identify the most frequently transferred products between warehouses to improve transfer processes
-DELIMITER //
+DROP PROCEDURE IF EXISTS MostTransferredProducts;
 
-DROP PROCEDURE IF EXISTS MostTransferredProducts //
+DELIMITER //
 
 CREATE PROCEDURE MostTransferredProducts()
 BEGIN
@@ -804,7 +804,7 @@ BEGIN
             warehouse_id,
             product_id,
             SUM(total_transferred) AS total_transferred,
-            ROW_NUMBER() OVER (PARTITION BY warehouse_id ORDER BY SUM(total_transferred) DESC) AS row_num
+            ROW_NUMBER() OVER (PARTITION BY warehouse_id ORDER BY SUM(total_transferred) DESC) AS row_order
         FROM (
             SELECT 
                 from_warehouse_id AS warehouse_id,
@@ -813,7 +813,7 @@ BEGIN
             FROM 
                 WarehouseTransfers
             GROUP BY 
-                from_warehouse_id, product_id
+                1,2
             
             UNION ALL
             
@@ -824,20 +824,20 @@ BEGIN
             FROM 
                 WarehouseTransfers
             GROUP BY 
-                to_warehouse_id, product_id
+                1,2
         ) AS transfers
         GROUP BY 
-            warehouse_id, product_id
-    ) AS ranked_transfers
+            1,2
+    ) AS ordered_transfers
     WHERE 
-        row_num <= 5
+        row_order <= 5
     ORDER BY 
-        warehouse_id, row_num;
+        warehouse_id, row_order;
 END //
 
 DELIMITER ;
 
-CALL MostTransferredProducts()
+CALL MostTransferredProducts();
 
 -- Expected Output:
 -- A list of the most frequently transferred products between warehouses. The output should include
