@@ -580,4 +580,4 @@ BEGIN
 END //
 
 DELIMITER ;
-
+CALL MostTransferredProducts()
