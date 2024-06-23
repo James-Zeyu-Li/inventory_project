@@ -10,6 +10,7 @@ item_exist: BEGIN
 
     -- If the product does not exist, insert an alert and exit
     IF product_exists = 0 THEN
+		SELECT CONCAT('Alert: Product ID ', product_id_var, ' does not exist.') AS Warning;
         INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
         VALUES ('Product', product_id_var, CONCAT('Alert: Product ID ', product_id_var, ' does not exist.'), NOW());
         LEAVE item_exist;
@@ -120,9 +121,22 @@ BEGIN
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
     main_block: BEGIN
+        -- Ensure TempSuppliers table exists and is populated
+        DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
+        CREATE TEMPORARY TABLE TempSuppliers AS
+        SELECT supplier_id, catalog_id, price, max_quantity
+        FROM Catalog
+        WHERE product_id = product_id_var
+        ORDER BY price;
+
+        -- Fetch the first supplier ID to initialize the PurchaseOrder
+        SELECT supplier_id INTO supplier_var
+        FROM TempSuppliers
+        LIMIT 1;
+        
         -- Create Purchase Order
         INSERT INTO PurchaseOrders (supplier_id, order_date, status, total_cost)
-        VALUES (NULL, CURDATE(), 'Add to Inventory', 0);
+        VALUES (supplier_var, CURDATE(), 'Pending', 0);
 
         SET po_var = LAST_INSERT_ID();
 
@@ -184,6 +198,12 @@ BEGIN
                                        quantity_var, ' units of product ID ', product_id_var, 
                                        '. PO rejected. Unallocated quantity: ', remaining_quantity);
             
+            -- Update the Purchase Order status to 'Rejected'
+            UPDATE PurchaseOrders
+            SET status = 'Rejected'
+            WHERE po_id = po_var;
+            
+            -- Add alert message
             INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
             VALUES ('Product', product_id_var, alert_message, NOW());
 
@@ -217,7 +237,7 @@ BEGIN
 
             -- Update Purchase Order with total cost
             UPDATE PurchaseOrders
-            SET total_cost = total_cost
+            SET total_cost = total_cost, status = 'Add to Inventory'
             WHERE po_id = po_var;
 
             -- Update Inventory based on allocations with shelf space
@@ -252,27 +272,22 @@ DELIMITER ;
 
 DELIMITER $$
 CREATE DEFINER=`root`@`localhost` PROCEDURE `find_cheapest_suppliers`(
-    IN p_product_id INT,
-    OUT p_cheapest_supplier_id INT,
-    OUT p_cheapest_catalog_id INT,
-    OUT p_cheapest_price DECIMAL(10, 2)
+    IN p_product_id INT
 )
 BEGIN
+    -- Ensure TempSuppliers table is dropped if it exists
     DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
-    
-    -- Find supplier and catalog
-    SELECT supplier_id, catalog_id, price
-    INTO p_cheapest_supplier_id, p_cheapest_catalog_id, p_cheapest_price
-    FROM Catalog
-    WHERE product_id = p_product_id
-    ORDER BY price
-    LIMIT 1;
-    
-    -- List all result in temporary table sort by price
+
+    -- Create a temporary table to list all suppliers sorted by price
     CREATE TEMPORARY TABLE TempSuppliers AS
     SELECT supplier_id, catalog_id, price, max_quantity
     FROM Catalog
     WHERE product_id = p_product_id
+    ORDER BY price;
+
+    -- Select the cheapest supplier and catalog for the given product
+    SELECT supplier_id, catalog_id, price
+    FROM TempSuppliers
     ORDER BY price;
 END$$
 DELIMITER ;
@@ -421,9 +436,10 @@ BEGIN
 
     -- Check if total stock is enough to fulfill the order
     IF v_total_stock < p_quantity THEN
-        -- Insert alert
+        -- Insert alert and display the alert message
         INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
         VALUES ('Product', p_product_id, CONCAT('Insufficient stock for product ', p_product_id, ' to fulfill sales order ', p_order_id), NOW());
+        SELECT CONCAT('Insufficient stock for product ', p_product_id, ' to fulfill sales order ', p_order_id) AS alert_message;
     ELSE
         -- Loop through warehouses to fulfill the order
         SET v_needed_quantity = p_quantity;
@@ -465,25 +481,10 @@ BEGIN
                 LEAVE read_loop;
             END IF;
 
-            -- Insert alert
+            -- Insert alert for low stock level and generate a suggestion instead of actual purchase order
             INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
-            VALUES ('Product', p_product_id, CONCAT('Stock level for product ', p_product_id, ' in inventory ID ', v_inventory_id, ' has fallen below the safety stock level.'), NOW());
-
-            -- Suggest a purchase order to bring stock level back to healthy stock level
-            INSERT INTO PurchaseOrders (supplier_id, order_date, expected_delivery_date, status, total_cost)
-            SELECT supplier_id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Pending', (v_healthy_stock_level - v_current_stock) * price
-            FROM Catalog
-            JOIN Products ON Catalog.product_id = Products.product_id
-            WHERE Products.product_id = p_product_id
-            LIMIT 1;
-
-            -- Insert purchase order details
-            INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
-            SELECT LAST_INSERT_ID(), Catalog.catalog_id, (v_healthy_stock_level - v_current_stock), Catalog.price
-            FROM Catalog
-            JOIN Products ON Catalog.product_id = Products.product_id
-            WHERE Products.product_id = p_product_id
-            LIMIT 1;
+            VALUES ('Product', p_product_id, CONCAT('Suggestion: Consider placing a purchase order for product ', p_product_id, ' in inventory ID ', v_inventory_id, '. Current stock is ', v_current_stock, ' units, below safe stock level of ', v_safe_stock_level, ' units.'), NOW());
+			SELECT CONCAT('Suggestion: Consider placing a purchase order for product ', p_product_id, ' in inventory ID ', v_inventory_id, '. Current stock is ', v_current_stock, ' units, below safe stock level of ', v_safe_stock_level, ' units.') AS alert_message;
         END LOOP;
 
         CLOSE below_safe_stock_cursor;
