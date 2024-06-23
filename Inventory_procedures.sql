@@ -272,7 +272,90 @@ DELIMITER ;
 
 CALL GetLowStockProducts();
 
+-- 12 按仓库和月统计每个仓库的库存变动情况
+DROP PROCEDURE IF EXISTS MonthlyInventoryChanges
+
+DELIMITER //
+
+USE inventory_mgmt;
+
+CREATE PROCEDURE MonthlyInventoryChanges()
+BEGIN
+    SELECT 
+        i.warehouse_id,
+        i.product_id,
+        DATE_FORMAT(t.transfer_date, '%Y-%m') AS month_year,
+        COALESCE(SUM(CASE 
+            WHEN t.from_warehouse_id = i.warehouse_id THEN -t.quantity
+            WHEN t.to_warehouse_id = i.warehouse_id THEN t.quantity
+            ELSE 0 
+        END), 0) AS quantity_change
+    FROM 
+        Inventory i
+    LEFT JOIN 
+        WarehouseTransfers t ON i.product_id = t.product_id 
+    GROUP BY 
+        i.warehouse_id, i.product_id, month_year
+    HAVING 
+        quantity_change <> 0
+    ORDER BY 
+        i.warehouse_id, i.product_id, month_year;
+END //
+
+DELIMITER ;
+
+CALL MonthlyInventoryChanges();
+
+
+-- 13 每个仓库的最常见调货产品，用于优化仓库间的调货流程
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS MostTransferredProducts //
+
+CREATE PROCEDURE MostTransferredProducts()
+BEGIN
+    SELECT 
+        warehouse_id,
+        product_id,
+        total_transferred
+    FROM (
+        SELECT 
+            warehouse_id,
+            product_id,
+            SUM(total_transferred) AS total_transferred,
+            ROW_NUMBER() OVER (PARTITION BY warehouse_id ORDER BY SUM(total_transferred) DESC) AS row_num
+        FROM (
+            SELECT 
+                from_warehouse_id AS warehouse_id,
+                product_id,
+                SUM(quantity) AS total_transferred
+            FROM 
+                WarehouseTransfers
+            GROUP BY 
+                from_warehouse_id, product_id
+            
+            UNION ALL
+            
+            SELECT 
+                to_warehouse_id AS warehouse_id,
+                product_id,
+                SUM(quantity) AS total_transferred
+            FROM 
+                WarehouseTransfers
+            GROUP BY 
+                to_warehouse_id, product_id
+        ) AS transfers
+        GROUP BY 
+            warehouse_id, product_id
+    ) AS ranked_transfers
+    WHERE 
+        row_num <= 5
+    ORDER BY 
+        warehouse_id, row_num;
+END //
+
+DELIMITER ;
 
 
 
-
+CALL MostTransferredProducts();
