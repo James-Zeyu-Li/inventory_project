@@ -414,7 +414,6 @@ BEGIN
 END//
 DELIMITER ;
 
--- William
 -- Test case for a product that exists
 CALL GetProductInventoryDetails(1);
 
@@ -753,60 +752,7 @@ CALL GetLowStockProducts();
 -- A list of products with their current stock levels below the safe stock level. The output should include
 -- the product ID, product name, safe stock level, current stock, and stock deficit for each product.
 
--- 10.Compare prices for the same product from different suppliers
-DELIMITER //
-
-CREATE PROCEDURE CompareProductPrices(IN productName VARCHAR(255))
-BEGIN
-    DECLARE lowestPrice DECIMAL(10, 2);
-    DECLARE bestSupplier VARCHAR(255);
-    DECLARE currentSupplier VARCHAR(255);
-    DECLARE currentPrice DECIMAL(10, 2);
-    DECLARE done INT DEFAULT 0;
-
-    DECLARE supplierCursor CURSOR FOR 
-        SELECT s.name, c.price
-        FROM Catalog c
-        JOIN Products p ON c.product_id = p.product_id
-        JOIN Suppliers s ON c.supplier_id = s.supplier_id
-        WHERE p.name = productName;
-
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
-
-    SET lowestPrice = NULL;
-    SET bestSupplier = NULL;
-
-    OPEN supplierCursor;
-
-    supplier_loop: LOOP
-        FETCH supplierCursor INTO currentSupplier, currentPrice;
-        IF done THEN
-            LEAVE supplier_loop;
-        END IF;
-
-        IF lowestPrice IS NULL OR currentPrice < lowestPrice THEN
-            SET lowestPrice = currentPrice;
-            SET bestSupplier = currentSupplier;
-        END IF;
-    END LOOP supplier_loop;
-
-    CLOSE supplierCursor;
-
-    IF lowestPrice IS NOT NULL THEN
-        SELECT CONCAT('The best supplier for product ', productName, ' is ', bestSupplier, ' with a price of ', lowestPrice) AS result;
-    ELSE
-        SELECT CONCAT('No suppliers found for product ', productName) AS result;
-    END IF;
-END //
-
-DELIMITER ;
-
-CALL CompareProductPrices('Laptop');
-
--- Expected Output:
--- A message indicating the best supplier for the specified product and the lowest price offered by that supplier.
-
--- 11. Report monthly inventory changes by warehouse
+-- 10. Report monthly inventory changes by warehouse
 DROP PROCEDURE IF EXISTS MonthlyInventoryChanges
 
 DELIMITER //
@@ -842,7 +788,7 @@ CALL MonthlyInventoryChanges();
 -- A report showing the monthly inventory changes for each warehouse. The output should include the
 -- warehouse ID, product ID, month and year, and the quantity change for each product in each warehouse.
 
--- 12. Identify the most frequently transferred products between warehouses to improve transfer processes
+-- 11. Identify the most frequently transferred products between warehouses to improve transfer processes
 DELIMITER //
 
 DROP PROCEDURE IF EXISTS MostTransferredProducts //
