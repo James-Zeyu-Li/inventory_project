@@ -104,9 +104,22 @@ BEGIN
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
     main_block: BEGIN
+        -- Ensure TempSuppliers table exists and is populated
+        DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
+        CREATE TEMPORARY TABLE TempSuppliers AS
+        SELECT supplier_id, catalog_id, price, max_quantity
+        FROM Catalog
+        WHERE product_id = product_id_var
+        ORDER BY price;
+
+        -- Fetch the first supplier ID to initialize the PurchaseOrder
+        SELECT supplier_id INTO supplier_var
+        FROM TempSuppliers
+        LIMIT 1;
+
         -- Create Purchase Order
         INSERT INTO PurchaseOrders (supplier_id, order_date, status, total_cost)
-        VALUES (NULL, CURDATE(), 'Add to Inventory', 0);
+        VALUES (supplier_var, CURDATE(), 'Add to Inventory', 0);
 
         SET po_var = LAST_INSERT_ID();
 
@@ -236,37 +249,39 @@ DELIMITER ;
 
 -- Test cases for create_purchase_order
 
--- Test 1: Sufficient inventory
-CALL create_purchase_order(1, 10); 
--- Expected result: PO created successfully, inventory updated, alert logged for successful PO creation
 
--- Test 2: Insufficient inventory
-CALL create_purchase_order(1, 100000); 
--- Expected result: PO creation failed, alert logged for insufficient inventory
+	-- Test cases for create_purchase_order
+	-- Test 1: Sufficient inventory
+	CALL create_purchase_order(1, 10); 
+	-- Expected result: PO created successfully, inventory updated, alert logged for successful PO creation
 
--- Test 3: Partial inventory allocation
-CALL create_purchase_order(2, 500); 
--- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
+	-- Test 2: Insufficient inventory
+	CALL create_purchase_order(1, 100000); 
+	-- Expected result: PO creation failed, alert logged for insufficient inventory
 
--- Test 4: Single warehouse insufficient, total inventory sufficient
-CALL create_purchase_order(3, 15); 
--- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
+	-- Test 3: Partial inventory allocation
+	CALL create_purchase_order(2, 500); 
+	-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
 
--- Test 5: Check cheapest supplier selection
-CALL create_purchase_order(4, 5); 
--- Expected result: PO created successfully, cheapest supplier selected, inventory updated, alert logged for successful PO creation
+	-- Test 4: Single warehouse insufficient, total inventory sufficient
+	CALL create_purchase_order(3, 15); 
+	-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
 
--- Verify PurchaseOrders table
-SELECT * FROM PurchaseOrders ORDER BY po_id DESC LIMIT 1;
+	-- Test 5: Check cheapest supplier selection
+	CALL create_purchase_order(4, 5); 
+	-- Expected result: PO created successfully, cheapest supplier selected, inventory updated, alert logged for successful PO creation
 
--- Verify PurchaseOrderDetails table
-SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC LIMIT 1;
+	-- Verify PurchaseOrders table
+	SELECT * FROM PurchaseOrders ORDER BY po_id DESC;
 
--- Verify Inventory table
-SELECT * FROM Inventory WHERE product_id = 1;
+	-- Verify PurchaseOrderDetails table
+	SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC;
 
--- Verify Alerts table
-SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
+	-- Verify Inventory table
+	SELECT * FROM Inventory WHERE product_id = 1;
+
+	-- Verify Alerts table
+	SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
 
 -- Trigger to handle purchase order details insertion
 -- If a product is not in the product list, log a warning
