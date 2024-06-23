@@ -1,9 +1,6 @@
 USE inventory_mgmt;
-DROP PROCEDURE IF EXISTS create_purchase_order;
-DROP PROCEDURE IF EXISTS find_cheapest_suppliers;
 
--- Zeyu Li
--- 1: find cheapest supplier
+-- 1: Find the cheapest supplier for a product
 DROP PROCEDURE IF EXISTS find_cheapest_suppliers;
 
 DELIMITER //
@@ -16,7 +13,7 @@ CREATE PROCEDURE find_cheapest_suppliers(
 BEGIN
     DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
     
-    -- find supplier and catalog
+    -- Find supplier and catalog
     SELECT supplier_id, catalog_id, price
     INTO p_cheapest_supplier_id, p_cheapest_catalog_id, p_cheapest_price
     FROM Catalog
@@ -24,7 +21,7 @@ BEGIN
     ORDER BY price
     LIMIT 1;
     
-    -- list all result in temporary table sort by price
+    -- List all result in temporary table sort by price
     CREATE TEMPORARY TABLE TempSuppliers AS
     SELECT supplier_id, catalog_id, price, max_quantity
     FROM Catalog
@@ -33,31 +30,31 @@ BEGIN
 END//
 DELIMITER ;
 
--- William
--- test find_cheapest_suppliers
--- test for product 1
+-- Test the find_cheapest_suppliers procedure
+
+-- Test for product 1
 DELIMITER //
 CALL find_cheapest_suppliers(1, @cheapest_supplier_id1, @cheapest_catalog_id1, @cheapest_price1);
 SELECT @cheapest_supplier_id1 AS cheapest_supplier_id, @cheapest_catalog_id1 AS cheapest_catalog_id, @cheapest_price1 AS cheapest_price;
+DELIMITER ;
 
--- test for product 2
+-- Test for product 2
+DELIMITER //
 CALL find_cheapest_suppliers(2, @cheapest_supplier_id2, @cheapest_catalog_id2, @cheapest_price2);
 SELECT @cheapest_supplier_id2 AS cheapest_supplier_id, @cheapest_catalog_id2 AS cheapest_catalog_id, @cheapest_price2 AS cheapest_price;
 DELIMITER ;
 
--- Expected output
--- product_id = 1
+-- Expected output:
+-- For product_id = 1
 -- cheapest_supplier_id = 1
 -- cheapest_catalog_id = 1
 -- cheapest_price = 1150.00
 
--- product_id = 2
+-- For product_id = 2
 -- cheapest_supplier_id = 4
 -- cheapest_catalog_id = 4
 -- cheapest_price = 750.00
 
-
--- Zeyu Li
 -- 2: check if inventory after PO will be larger than warehouse capacity
 -- if after PO the capacity is larger than the all warehouse capacity
 -- Check the warehouse capacity.
@@ -66,7 +63,10 @@ DELIMITER ;
 -- Compare the new total capacity with the warehouse capacity.
 -- Trigger an alert and prevent the PO from being created if the capacity is exceeded. Add to alert chart.
 -- if one warehouse can take partial, check if other warehouse has capability to take other parts. 
+DROP PROCEDURE IF EXISTS create_purchase_order;
+
 DELIMITER //
+
 CREATE PROCEDURE create_purchase_order(
     IN product_id_var INT,
     IN quantity_var INT
@@ -234,43 +234,43 @@ BEGIN
 END//
 DELIMITER ;
 
+-- Test cases for create_purchase_order
 
--- 测试1：库存足够的情况
+-- Test 1: Sufficient inventory
 CALL create_purchase_order(1, 10); 
--- 预期结果：PO 成功创建，库存更新，警报记录成功的 PO 创建
+-- Expected result: PO created successfully, inventory updated, alert logged for successful PO creation
 
--- 测试2：库存不足的情况
+-- Test 2: Insufficient inventory
 CALL create_purchase_order(1, 100000); 
--- 预期结果：PO 创建失败，警报记录库存不足
+-- Expected result: PO creation failed, alert logged for insufficient inventory
 
--- 测试3：部分库存足够的情况
+-- Test 3: Partial inventory allocation
 CALL create_purchase_order(2, 500); 
--- 预期结果：PO 成功创建，部分数量分配到多个仓库，库存更新，警报记录成功的 PO 创建
+-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
 
--- 测试4：单个仓库不足的情况，但总库存足够
+-- Test 4: Single warehouse insufficient, total inventory sufficient
 CALL create_purchase_order(3, 15); 
--- 预期结果：PO 成功创建，数量分配到多个仓库，库存更新，警报记录成功的 PO 创建
+-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
 
--- 测试5：检查最便宜供应商选择
+-- Test 5: Check cheapest supplier selection
 CALL create_purchase_order(4, 5); 
--- 预期结果：PO 成功创建，选择最便宜的供应商，库存更新，警报记录成功的 PO 创建
+-- Expected result: PO created successfully, cheapest supplier selected, inventory updated, alert logged for successful PO creation
 
--- 验证 PurchaseOrders 表
+-- Verify PurchaseOrders table
 SELECT * FROM PurchaseOrders ORDER BY po_id DESC LIMIT 1;
 
--- 验证 PurchaseOrderDetails 表
+-- Verify PurchaseOrderDetails table
 SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC LIMIT 1;
 
--- 验证 Inventory 表
+-- Verify Inventory table
 SELECT * FROM Inventory WHERE product_id = 1;
 
--- 验证 Alerts 表
+-- Verify Alerts table
 SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
 
-
--- Zeyu
--- trigger for procedure 2, if PO contains products that is not in the product list warning, item not in product list
--- if in product list but not in inventory list, add to inventory list.
+-- Trigger to handle purchase order details insertion
+-- If a product is not in the product list, log a warning
+-- If in product list but not in inventory list, add to inventory list
 DROP TRIGGER IF EXISTS trg_after_insert_purchase_order_details;
 DELIMITER //
 
@@ -310,11 +310,7 @@ BEGIN
 END//
 DELIMITER ;
 
-
-
-
--- Zeyu
--- 3
+-- 3: Calculate the average price per product
 DROP PROCEDURE IF EXISTS calculate_average_price_per_product;
 DELIMITER //
 
@@ -371,7 +367,6 @@ DELIMITER ;
 
 CALL calculate_average_price_per_product(1);
 
--- William
 -- Test case for a product that exists
 DELIMITER //
 CALL calculate_average_price_per_product(1);
@@ -393,10 +388,7 @@ DELIMITER ;
 -- Verify the Alerts table for the second test case
 SELECT * FROM Alerts WHERE entity_id = 999 AND entity_type = 'Product';
 
-
-
--- Zeyu Li
--- 4
+-- 4: Get product inventory details
 DROP PROCEDURE IF EXISTS GetProductInventoryDetails;
 DELIMITER //
 
@@ -439,14 +431,9 @@ CALL GetProductInventoryDetails(999);
 -- Expected output:
 -- No rows returned as the product_id 999 does not exist
 
+-- 5: Check stock level and alert if below safe level
+DROP PROCEDURE IF EXISTS check_stock_level;
 
-
--- Zeyu Li
--- 5
--- alert if Sales order brings the stock level less than safety stock
--- generate a purchase order with detail which bring the  stock level back to healthy stock waiting for confirmation. 
-
--- check stock level
 DELIMITER //
 
 CREATE PROCEDURE check_stock_level(
@@ -481,8 +468,6 @@ END //
 
 DELIMITER ;
 
-
--- William
 -- Test case for a product that exists and needs reorder
 CALL check_stock_level(1, 5, @needs_reorder, @message);
 SELECT @needs_reorder AS needs_reorder, @message AS message;
@@ -508,9 +493,8 @@ SELECT @needs_reorder AS needs_reorder, @message AS message;
 -- message: 'Product not found'
 
 
--- Zeyu
--- 6: When sales order being create, subtract the amount from the inventory
--- if all inventories from all warehouses can't fufill the SO requests, send system alert.
+-- 6: Process sales order and update inventory
+-- If inventory is not enough, send a system alert and suggest a purchase order
 DROP PROCEDURE IF EXISTS process_sales_order;
 
 DELIMITER //
@@ -617,7 +601,6 @@ END //
 
 DELIMITER ;
 
--- William
 -- Call the stored procedure to process the sales order
 CALL process_sales_order(1, 1, 30);
 
@@ -638,8 +621,7 @@ CALL process_sales_order(1, 1, 30000);
 SELECT * FROM Alerts WHERE entity_id = 1 AND entity_type = 'Product';
 
 
--- Zeyu
--- 7. alert if Inventory is not enough for SO
+-- 7: Trigger to process sales order details and check inventory
 DROP TRIGGER IF EXISTS trg_after_insert_sales_order_details;
 
 DELIMITER //
@@ -654,7 +636,7 @@ END //
 DELIMITER ;
 
 
--- William
+-- Test case for low stock situation
 -- 1. Insert SalesOrderDetails data to test low stock situation
 -- For example, product_id 1 (Laptop) and quantity 20 to simulate low stock
 INSERT INTO SalesOrderDetails (order_id, product_id, quantity, price_for_product) VALUES (34, 1, 20, 23000);
@@ -680,8 +662,7 @@ SELECT * FROM PurchaseOrderDetails WHERE po_id = (SELECT po_id FROM PurchaseOrde
 
 
 
--- 8: alert if Sales order brings the stock level less than safety stock
--- generate a purchase order suggesstion which bring the stock level back to healthy stock
+-- 8: Trigger to check inventory after update and suggest a purchase order if needed
 drop trigger if exists after_inventory_update;
 DELIMITER //
 
@@ -692,24 +673,24 @@ BEGIN
     DECLARE v_safe_stock_level INT;
     DECLARE v_healthy_stock_level INT;
 
-    -- 获取安全库存和健康库存水平
+    -- Get safe and healthy stock levels
     SELECT safe_stock_level, healthy_stock_level INTO v_safe_stock_level, v_healthy_stock_level 
     FROM Products WHERE product_id = NEW.product_id;
 
-    -- 检查是否低于安全库存
+    -- Check if the quantity is below safe stock level
     IF NEW.quantity < v_safe_stock_level THEN
-        -- 插入警报
+        -- Insert alert
         INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
         VALUES ('Product', NEW.product_id, CONCAT('Stock level for product ', NEW.product_id, ' has fallen below the safety stock level.'), NOW());
 
-        -- 建议采购订单以恢复到健康库存水平
+        -- Suggest a purchase order to bring stock level back to healthy stock level
         INSERT INTO PurchaseOrders (supplier_id, order_date, expected_delivery_date, status, total_cost)
         SELECT supplier_id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Pending', (v_healthy_stock_level - NEW.quantity) * price
         FROM Catalog
         WHERE product_id = NEW.product_id
         LIMIT 1;
 
-        -- 插入采购订单详情
+        -- Insert purchase order details
         INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
         SELECT LAST_INSERT_ID(), catalog_id, (v_healthy_stock_level - NEW.quantity), price
         FROM Catalog
@@ -720,7 +701,7 @@ END //
 
 DELIMITER ;
 
--- William
+-- Test case
 -- Step 1: Insert a Sales Order
 INSERT INTO SalesOrders (order_id, customer_id, order_date, total_price, delivery_date, status)
 VALUES (100, 1, '2024-06-20', 2400, '2024-06-25', 'Pending');
@@ -741,12 +722,11 @@ SELECT * FROM Alerts WHERE entity_id = 1 AND entity_type = 'Product';
 -- Check the PurchaseOrders table to ensure a purchase order was created if needed
 SELECT * FROM PurchaseOrders WHERE status = 'Pending';
 
-
-
--- Liuyi 
 -- 9. Find products with stock levels below the safe stock level to restock them on time
 drop PROCEDURE if exists GetLowStockProducts;
+
 DELIMITER //
+
 CREATE PROCEDURE GetLowStockProducts()
 BEGIN
     SELECT
@@ -768,6 +748,10 @@ END //
 DELIMITER ;
 
 CALL GetLowStockProducts();
+
+-- Expected Output:
+-- A list of products with their current stock levels below the safe stock level. The output should include
+-- the product ID, product name, safe stock level, current stock, and stock deficit for each product.
 
 -- 10.Compare prices for the same product from different suppliers
 DELIMITER //
@@ -819,13 +803,13 @@ DELIMITER ;
 
 CALL CompareProductPrices('Laptop');
 
+-- Expected Output:
+-- A message indicating the best supplier for the specified product and the lowest price offered by that supplier.
 
 -- 11. Report monthly inventory changes by warehouse
 DROP PROCEDURE IF EXISTS MonthlyInventoryChanges
 
 DELIMITER //
-
-USE inventory_mgmt;
 
 CREATE PROCEDURE MonthlyInventoryChanges()
 BEGIN
@@ -854,6 +838,9 @@ DELIMITER ;
 
 CALL MonthlyInventoryChanges();
 
+-- Expected Output:
+-- A report showing the monthly inventory changes for each warehouse. The output should include the
+-- warehouse ID, product ID, month and year, and the quantity change for each product in each warehouse.
 
 -- 12. Identify the most frequently transferred products between warehouses to improve transfer processes
 DELIMITER //
@@ -903,4 +890,10 @@ BEGIN
 END //
 
 DELIMITER ;
+
 CALL MostTransferredProducts()
+
+-- Expected Output:
+-- A list of the most frequently transferred products between warehouses. The output should include
+-- the warehouse ID, product ID, and the total quantity transferred for the top 5 most transferred 
+-- products in each warehouse.
