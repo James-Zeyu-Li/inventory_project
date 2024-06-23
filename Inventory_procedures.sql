@@ -420,7 +420,7 @@ DELIMITER ;
 
 
 -- Liuyi 
--- 10. 找出库存低于安全库存水平的产品，以便及时补货: 
+-- 9. Find products with stock levels below the safe stock level to restock them on time
 
 DELIMITER //
 USE inventory_mgmt;
@@ -446,7 +446,58 @@ DELIMITER ;
 
 CALL GetLowStockProducts();
 
--- 12 按仓库和月统计每个仓库的库存变动情况
+-- 10.Compare prices for the same product from different suppliers
+DELIMITER //
+
+CREATE PROCEDURE CompareProductPrices(IN productName VARCHAR(255))
+BEGIN
+    DECLARE lowestPrice DECIMAL(10, 2);
+    DECLARE bestSupplier VARCHAR(255);
+    DECLARE currentSupplier VARCHAR(255);
+    DECLARE currentPrice DECIMAL(10, 2);
+    DECLARE done INT DEFAULT 0;
+
+    DECLARE supplierCursor CURSOR FOR 
+        SELECT s.name, c.price
+        FROM Catalog c
+        JOIN Products p ON c.product_id = p.product_id
+        JOIN Suppliers s ON c.supplier_id = s.supplier_id
+        WHERE p.name = productName;
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+    SET lowestPrice = NULL;
+    SET bestSupplier = NULL;
+
+    OPEN supplierCursor;
+
+    supplier_loop: LOOP
+        FETCH supplierCursor INTO currentSupplier, currentPrice;
+        IF done THEN
+            LEAVE supplier_loop;
+        END IF;
+
+        IF lowestPrice IS NULL OR currentPrice < lowestPrice THEN
+            SET lowestPrice = currentPrice;
+            SET bestSupplier = currentSupplier;
+        END IF;
+    END LOOP supplier_loop;
+
+    CLOSE supplierCursor;
+
+    IF lowestPrice IS NOT NULL THEN
+        SELECT CONCAT('The best supplier for product ', productName, ' is ', bestSupplier, ' with a price of ', lowestPrice) AS result;
+    ELSE
+        SELECT CONCAT('No suppliers found for product ', productName) AS result;
+    END IF;
+END //
+
+DELIMITER ;
+
+CALL CompareProductPrices('Laptop');
+
+
+-- 11. Report monthly inventory changes by warehouse
 DROP PROCEDURE IF EXISTS MonthlyInventoryChanges
 
 DELIMITER //
@@ -481,7 +532,7 @@ DELIMITER ;
 CALL MonthlyInventoryChanges();
 
 
--- 13 每个仓库的最常见调货产品，用于优化仓库间的调货流程
+-- 12. Identify the most frequently transferred products between warehouses to improve transfer processes
 DELIMITER //
 
 DROP PROCEDURE IF EXISTS MostTransferredProducts //
