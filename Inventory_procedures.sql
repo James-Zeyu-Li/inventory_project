@@ -390,7 +390,7 @@ BEGIN
     DECLARE v_current_stock INT;
     DECLARE done INT DEFAULT 0;
     
-    DECLARE warehouse_cursor CURSOR FOR
+    DECLARE inventory_cursor CURSOR FOR
         SELECT inventory_id, quantity FROM Inventory WHERE product_id = p_product_id;
     
     DECLARE below_safe_stock_cursor CURSOR FOR
@@ -398,38 +398,38 @@ BEGIN
     
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
 
-    -- Get safe and healthy stock levels
+    -- 获取安全库存和健康库存水平
     SELECT safe_stock_level, healthy_stock_level INTO v_safe_stock_level, v_healthy_stock_level 
     FROM Products WHERE product_id = p_product_id;
 
-    -- Get total stock for the product
+    -- 获取产品的总库存
     SELECT SUM(quantity) INTO v_total_stock FROM Inventory WHERE product_id = p_product_id;
 
-    -- Check if total stock is enough to fulfill the order
+    -- 检查总库存是否足够满足订单
     IF v_total_stock < p_quantity THEN
-        -- Insert alert
+        -- 插入警报
         INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
         VALUES ('Product', p_product_id, CONCAT('Insufficient stock for product ', p_product_id, ' to fulfill sales order ', p_order_id), NOW());
     ELSE
-        -- Loop through warehouses to fulfill the order
+        -- 循环库存以满足订单
         SET v_needed_quantity = p_quantity;
-        OPEN warehouse_cursor;
+        OPEN inventory_cursor;
 
         read_loop: LOOP
-            FETCH warehouse_cursor INTO v_inventory_id, v_current_stock;
+            FETCH inventory_cursor INTO v_inventory_id, v_current_stock;
             IF done THEN
                 LEAVE read_loop;
             END IF;
 
             IF v_current_stock >= v_needed_quantity THEN
-                -- Update inventory
+                -- 更新库存
                 UPDATE Inventory SET quantity = quantity - v_needed_quantity 
                 WHERE inventory_id = v_inventory_id;
 
                 SET v_needed_quantity = 0;
                 LEAVE read_loop;
             ELSE
-                -- Update inventory and reduce needed quantity
+                -- 更新库存并减少所需数量
                 UPDATE Inventory SET quantity = 0 
                 WHERE inventory_id = v_inventory_id;
 
@@ -437,12 +437,12 @@ BEGIN
             END IF;
         END LOOP;
 
-        CLOSE warehouse_cursor;
+        CLOSE inventory_cursor;
 
-        -- Reset done flag
+        -- 重置 done 标志
         SET done = 0;
 
-        -- Check if stock level falls below safe stock level in any inventory item
+        -- 检查任何库存项目的库存水平是否低于安全库存水平
         OPEN below_safe_stock_cursor;
 
         read_loop: LOOP
@@ -451,11 +451,11 @@ BEGIN
                 LEAVE read_loop;
             END IF;
 
-            -- Insert alert
+            -- 插入警报
             INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
             VALUES ('Product', p_product_id, CONCAT('Stock level for product ', p_product_id, ' in inventory ID ', v_inventory_id, ' has fallen below the safety stock level.'), NOW());
 
-            -- Suggest a purchase order to bring stock level back to healthy stock level
+            -- 建议采购订单以恢复到健康库存水平
             INSERT INTO PurchaseOrders (supplier_id, order_date, expected_delivery_date, status, total_cost)
             SELECT supplier_id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Pending', (v_healthy_stock_level - v_current_stock) * price
             FROM Catalog
@@ -463,7 +463,7 @@ BEGIN
             WHERE Products.product_id = p_product_id
             LIMIT 1;
 
-            -- Insert purchase order details
+            -- 插入采购订单详情
             INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
             SELECT LAST_INSERT_ID(), Catalog.catalog_id, (v_healthy_stock_level - v_current_stock), Catalog.price
             FROM Catalog
