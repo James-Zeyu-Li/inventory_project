@@ -789,9 +789,10 @@ DELIMITER //
 CREATE PROCEDURE MostTransferredProducts()
 BEGIN
     SELECT 
-        warehouse_id,
-        product_id,
-        total_transferred
+        ordered_transfers.warehouse_id,
+        ordered_transfers.product_id,
+        p.name AS product_name, 
+        ordered_transfers.total_transferred
     FROM (
         SELECT 
             warehouse_id,
@@ -806,7 +807,7 @@ BEGIN
             FROM 
                 WarehouseTransfers
             GROUP BY 
-                1,2
+                from_warehouse_id, product_id
             
             UNION ALL
             
@@ -817,20 +818,22 @@ BEGIN
             FROM 
                 WarehouseTransfers
             GROUP BY 
-                1,2
+                to_warehouse_id, product_id
         ) AS transfers
         GROUP BY 
-            1,2
+            warehouse_id, product_id
     ) AS ordered_transfers
+    JOIN Products p ON ordered_transfers.product_id = p.product_id 
     WHERE 
-        row_order <= 5
+        ordered_transfers.row_order <= 3
     ORDER BY 
-        warehouse_id, row_order;
+        ordered_transfers.warehouse_id, ordered_transfers.row_order;
 END //
 
 DELIMITER ;
 
 CALL MostTransferredProducts();
+
 
 -- Expected Output:
 -- A list of the most frequently transferred products between warehouses. The output should include
