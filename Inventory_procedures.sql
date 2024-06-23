@@ -42,6 +42,7 @@ END//
 -- Compare the new total capacity with the warehouse capacity.
 -- Trigger an alert and prevent the PO from being created if the capacity is exceeded. Add to alert chart.
 -- if one warehouse can take partial, check if other warehouse has capability to take other parts. 
+
 DELIMITER //
 CREATE PROCEDURE create_purchase_order(
     IN product_id_var INT,
@@ -53,24 +54,38 @@ BEGIN
     DECLARE price_var DECIMAL(10, 2);
     DECLARE po_var INT;
     DECLARE remaining_quantity INT;
+    DECLARE total_cost DECIMAL(10, 2) DEFAULT 0;
     DECLARE current_warehouse_id INT;
     DECLARE current_warehouse_capacity INT;
     DECLARE current_warehouse_used_capacity INT;
     DECLARE allocatable_quantity INT;
     DECLARE product_shelf_space INT;
+    DECLARE supplier_quantity INT;
+    DECLARE supplier_price DECIMAL(10, 2);
     DECLARE done BOOLEAN DEFAULT FALSE;
     DECLARE alert_message VARCHAR(1000);
-
+    DECLARE temp_supplier_id INT;
+    DECLARE temp_catalog_id INT;
+    DECLARE temp_price DECIMAL(10, 2);
+    DECLARE temp_max_quantity INT;
+    
     DECLARE warehouse_cursor CURSOR FOR 
         SELECT warehouse_id, capacity 
         FROM Warehouses 
         ORDER BY capacity DESC;
 
+    DECLARE supplier_cursor CURSOR FOR
+        SELECT supplier_id, catalog_id, price, max_quantity
+        FROM TempSuppliers;
+
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
     main_block: BEGIN
-        -- Find cheapest supplier
-        CALL find_cheapest_suppliers(product_id_var, supplier_var, catalog_var, price_var);
+        -- Create Purchase Order
+        INSERT INTO PurchaseOrders (supplier_id, order_date, status, total_cost)
+        VALUES (NULL, CURDATE(), 'Add to Inventory', 0);
+
+        SET po_var = LAST_INSERT_ID();
 
         -- Get product shelf space
         SELECT shelf_space INTO product_shelf_space
@@ -136,21 +151,48 @@ BEGIN
             SELECT alert_message AS result;
             LEAVE main_block;
         ELSE
-            -- All quantity could be allocated, create PO and update inventory
-            INSERT INTO PurchaseOrders (supplier_id, order_date, status, total_cost)
-            VALUES (supplier_var, CURDATE(), ' Add to Inventory', price_var * quantity_var);
+            -- Allocate the quantities from suppliers
+            SET remaining_quantity = quantity_var;
+            OPEN supplier_cursor;
+            supplier_loop: LOOP
+                FETCH supplier_cursor INTO temp_supplier_id, temp_catalog_id, temp_price, temp_max_quantity;
+                IF done THEN
+                    LEAVE supplier_loop;
+                END IF;
 
-            SET po_var = LAST_INSERT_ID();
+                SET supplier_quantity = LEAST(temp_max_quantity, remaining_quantity);
+                SET supplier_price = temp_price * supplier_quantity;
+                SET total_cost = total_cost + supplier_price;
 
-            -- Create Purchase Order Detail
-            INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
-            VALUES (po_var, catalog_var, quantity_var, price_var);
+                -- Create Purchase Order Detail
+                INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
+                VALUES (po_var, temp_catalog_id, supplier_quantity, temp_price);
 
-            -- Update Inventory based on allocations
-            INSERT INTO Inventory (warehouse_id, product_id, quantity, catalog_id)
-            SELECT warehouse_id, product_id_var, quantity, catalog_var
+                -- Update remaining quantity
+                SET remaining_quantity = remaining_quantity - supplier_quantity;
+                IF remaining_quantity = 0 THEN
+                    LEAVE supplier_loop;
+                END IF;
+            END LOOP;
+            CLOSE supplier_cursor;
+
+            -- Update Purchase Order with total cost
+            UPDATE PurchaseOrders
+            SET total_cost = total_cost
+            WHERE po_id = po_var;
+
+            -- Update Inventory based on allocations with shelf space
+            INSERT INTO Inventory (warehouse_id, product_id, quantity, shelf_space, catalog_id)
+            SELECT warehouse_id, product_id_var, quantity, product_shelf_space * quantity, catalog_id
             FROM temp_allocations
-            ON DUPLICATE KEY UPDATE Inventory.quantity = Inventory.quantity + VALUES(Inventory.quantity);
+            JOIN (
+                SELECT catalog_id, supplier_id, price, max_quantity
+                FROM Catalog
+                WHERE product_id = product_id_var
+            ) AS temp_catalog ON temp_catalog.catalog_id = catalog_id
+            ON DUPLICATE KEY UPDATE 
+                Inventory.quantity = Inventory.quantity + VALUES(Inventory.quantity),
+                Inventory.shelf_space = Inventory.shelf_space + VALUES(Inventory.shelf_space);
 
             -- Add an alert for successful PO creation
             SET alert_message = CONCAT('Purchase Order created with ID: ', po_var, 
@@ -168,6 +210,8 @@ BEGIN
     END main_block;
 END//
 DELIMITER ;
+
+
 
 -- 测试1：库存足够的情况
 CALL create_purchase_order(1, 10); 
@@ -200,9 +244,6 @@ SELECT * FROM Inventory WHERE product_id = 1;
 
 -- 验证 Alerts 表
 SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
-
-
-
 
 
 
@@ -242,6 +283,9 @@ BEGIN
 END //
 
 DELIMITER ;
+
+
+
 
 
 
@@ -356,6 +400,3 @@ END //
 
 DELIMITER ;
 
-
-
-CALL MostTransferredProducts();
