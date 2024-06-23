@@ -488,7 +488,6 @@ SELECT @needs_reorder AS needs_reorder, @message AS message;
 -- 6: Process sales order and update inventory
 -- If inventory is not enough, send a system alert and suggest a purchase order
 DROP PROCEDURE IF EXISTS process_sales_order;
-
 DELIMITER //
 
 CREATE PROCEDURE process_sales_order (
@@ -522,9 +521,10 @@ BEGIN
 
     -- Check if total stock is enough to fulfill the order
     IF v_total_stock < p_quantity THEN
-        -- Insert alert
+        -- Insert alert and display the alert message
         INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
         VALUES ('Product', p_product_id, CONCAT('Insufficient stock for product ', p_product_id, ' to fulfill sales order ', p_order_id), NOW());
+        SELECT CONCAT('Insufficient stock for product ', p_product_id, ' to fulfill sales order ', p_order_id) AS alert_message;
     ELSE
         -- Loop through warehouses to fulfill the order
         SET v_needed_quantity = p_quantity;
@@ -566,25 +566,10 @@ BEGIN
                 LEAVE read_loop;
             END IF;
 
-            -- Insert alert
+            -- Insert alert for low stock level and generate a suggestion instead of actual purchase order
             INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
-            VALUES ('Product', p_product_id, CONCAT('Stock level for product ', p_product_id, ' in inventory ID ', v_inventory_id, ' has fallen below the safety stock level.'), NOW());
-
-            -- Suggest a purchase order to bring stock level back to healthy stock level
-            INSERT INTO PurchaseOrders (supplier_id, order_date, expected_delivery_date, status, total_cost)
-            SELECT supplier_id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Pending', (v_healthy_stock_level - v_current_stock) * price
-            FROM Catalog
-            JOIN Products ON Catalog.product_id = Products.product_id
-            WHERE Products.product_id = p_product_id
-            LIMIT 1;
-
-            -- Insert purchase order details
-            INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
-            SELECT LAST_INSERT_ID(), Catalog.catalog_id, (v_healthy_stock_level - v_current_stock), Catalog.price
-            FROM Catalog
-            JOIN Products ON Catalog.product_id = Products.product_id
-            WHERE Products.product_id = p_product_id
-            LIMIT 1;
+            VALUES ('Product', p_product_id, CONCAT('Suggestion: Consider placing a purchase order for product ', p_product_id, ' in inventory ID ', v_inventory_id, '. Current stock is ', v_current_stock, ' units, below safe stock level of ', v_safe_stock_level, ' units.'), NOW());
+			SELECT CONCAT('Suggestion: Consider placing a purchase order for product ', p_product_id, ' in inventory ID ', v_inventory_id, '. Current stock is ', v_current_stock, ' units, below safe stock level of ', v_safe_stock_level, ' units.') AS alert_message;
         END LOOP;
 
         CLOSE below_safe_stock_cursor;
@@ -593,24 +578,24 @@ END //
 
 DELIMITER ;
 
--- Call the stored procedure to process the sales order
-CALL process_sales_order(1, 1, 30);
+		-- Call the stored procedure to process the sales order
+		CALL process_sales_order(1, 1, 1000);
 
--- Check the inventory changes
-SELECT * FROM Inventory WHERE product_id = 1;
+		-- Check the inventory changes
+		SELECT * FROM Inventory WHERE product_id = 1;
 
--- Check the alerts
-SELECT * FROM Alerts WHERE entity_id = 1 AND entity_type = 'Product';
+		-- Check the alerts
+		SELECT * FROM Alerts WHERE entity_id = 1 AND entity_type = 'Product';
 
--- Check the generated purchase orders
-SELECT * FROM PurchaseOrders ORDER BY po_id DESC LIMIT 1;
+		-- Check the generated purchase orders
+		SELECT * FROM PurchaseOrders ORDER BY po_id DESC LIMIT 1;
 
--- Check the generated purchase order details
-SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC LIMIT 1;
+		-- Check the generated purchase order details
+		SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC LIMIT 1;
 
--- This test will result in an insufficient stock alert
-CALL process_sales_order(1, 1, 30000);
-SELECT * FROM Alerts WHERE entity_id = 1 AND entity_type = 'Product';
+		-- This test will result in an insufficient stock alert
+		CALL process_sales_order(1, 1, 30000);
+		SELECT * FROM Alerts WHERE entity_id = 1 AND entity_type = 'Product';
 
 
 -- 7: Trigger to process sales order details and check inventory
@@ -622,36 +607,35 @@ CREATE TRIGGER trg_after_insert_sales_order_details
 AFTER INSERT ON SalesOrderDetails
 FOR EACH ROW
 BEGIN
+    -- 调用存储过程
     CALL process_sales_order(NEW.order_id, NEW.product_id, NEW.quantity);
 END //
 
 DELIMITER ;
 
+		-- Test case for low stock situation
+		-- 1. Insert SalesOrderDetails data to test low stock situation
+		-- For example, product_id 1 (Laptop) and quantity 20 to simulate low stock
+		INSERT INTO SalesOrderDetails (order_id, product_id, quantity, price_for_product) VALUES (34, 1, 20, 23000);
 
--- Test case for low stock situation
--- 1. Insert SalesOrderDetails data to test low stock situation
--- For example, product_id 1 (Laptop) and quantity 20 to simulate low stock
-INSERT INTO SalesOrderDetails (order_id, product_id, quantity, price_for_product) VALUES (34, 1, 20, 23000);
+		-- 2. Check the Alerts table to confirm the alert was triggered
+		SELECT * FROM Alerts WHERE entity_type = 'Product' AND entity_id = 1;
 
--- 2. Check the Alerts table to confirm the alert was triggered
-SELECT * FROM Alerts WHERE entity_type = 'Product' AND entity_id = 1;
+		-- Expected result:
+		-- An alert message indicating that the stock for product ID 1 (Laptop) is insufficient to fulfill the sales order.
 
--- Expected result:
--- An alert message indicating that the stock for product ID 1 (Laptop) is insufficient to fulfill the sales order.
+		-- 3. Check the Inventory table to confirm the inventory was correctly updated
+		SELECT * FROM Inventory WHERE product_id = 1;
 
--- 3. Check the Inventory table to confirm the inventory was correctly updated
-SELECT * FROM Inventory WHERE product_id = 1;
+		-- Expected result:
+		-- Verify that the quantity of the product ID 1 (Laptop) has decreased by 20, or if the stock was insufficient, some warehouses should show a quantity of 0.
 
--- Expected result:
--- Verify that the quantity of the product ID 1 (Laptop) has decreased by 20, or if the stock was insufficient, some warehouses should show a quantity of 0.
+		-- 4. Check the PurchaseOrders and PurchaseOrderDetails tables
+		SELECT * FROM PurchaseOrders WHERE supplier_id = (SELECT supplier_id FROM Catalog WHERE product_id = 1 LIMIT 1) ORDER BY order_date DESC LIMIT 1;
+		SELECT * FROM PurchaseOrderDetails WHERE po_id = (SELECT po_id FROM PurchaseOrders WHERE supplier_id = (SELECT supplier_id FROM Catalog WHERE product_id = 1 LIMIT 1) ORDER BY order_date DESC LIMIT 1);
 
--- 4. Check the PurchaseOrders and PurchaseOrderDetails tables
-SELECT * FROM PurchaseOrders WHERE supplier_id = (SELECT supplier_id FROM Catalog WHERE product_id = 1 LIMIT 1) ORDER BY order_date DESC LIMIT 1;
-SELECT * FROM PurchaseOrderDetails WHERE po_id = (SELECT po_id FROM PurchaseOrders WHERE supplier_id = (SELECT supplier_id FROM Catalog WHERE product_id = 1 LIMIT 1) ORDER BY order_date DESC LIMIT 1);
-
--- Expected result:
--- Confirm that a new purchase order was created to replenish the stock for product ID 1 (Laptop).
-
+		-- Expected result:
+		-- Confirm that a new purchase order was created to replenish the stock for product ID 1 (Laptop).
 
 
 -- 8: Trigger to check inventory after update and suggest a purchase order if needed
@@ -675,44 +659,35 @@ BEGIN
         INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
         VALUES ('Product', NEW.product_id, CONCAT('Stock level for product ', NEW.product_id, ' has fallen below the safety stock level.'), NOW());
 
-        -- Suggest a purchase order to bring stock level back to healthy stock level
-        INSERT INTO PurchaseOrders (supplier_id, order_date, expected_delivery_date, status, total_cost)
-        SELECT supplier_id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Pending', (v_healthy_stock_level - NEW.quantity) * price
-        FROM Catalog
-        WHERE product_id = NEW.product_id
-        LIMIT 1;
-
-        -- Insert purchase order details
-        INSERT INTO PurchaseOrderDetails (po_id, catalog_id, quantity, cost_for_product)
-        SELECT LAST_INSERT_ID(), catalog_id, (v_healthy_stock_level - NEW.quantity), price
-        FROM Catalog
-        WHERE product_id = NEW.product_id
-        LIMIT 1;
+        -- Insert a suggestion alert for placing a purchase order
+        INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
+        VALUES ('Product', NEW.product_id, CONCAT('Suggestion: Consider placing a purchase order to replenish stock for product ', NEW.product_id, '. Current stock is ', NEW.quantity, ', below safe stock level of ', v_safe_stock_level), NOW());
     END IF;
 END //
 
 DELIMITER ;
 
--- Test case
--- Step 1: Insert a Sales Order
-INSERT INTO SalesOrders (order_id, customer_id, order_date, total_price, delivery_date, status)
-VALUES (100, 1, '2024-06-20', 2400, '2024-06-25', 'Pending');
+		-- Test case
+		-- Step 1: Insert a Sales Order
+		INSERT INTO SalesOrders (order_id, customer_id, order_date, total_price, delivery_date, status)
+		VALUES (100, 1, '2024-06-20', 2400, '2024-06-25', 'Pending');
 
--- Step 2: Insert Sales Order Details that will trigger the process_sales_order procedure via trigger
--- This should reduce the stock of product_id 1 (Laptop) by 10 units.
-INSERT INTO SalesOrderDetails (order_detail_id, order_id, product_id, quantity, price_for_product)
-VALUES (999, 100, 1, 10, 12000.00); -- Assume the total price for 10 units is 12000
+		-- Step 2: Insert Sales Order Details that will trigger the process_sales_order procedure via trigger
+		-- This should reduce the stock of product_id 1 (Laptop) by 10 units.
+		INSERT INTO SalesOrderDetails (order_detail_id, order_id, product_id, quantity, price_for_product)
+		VALUES (999, 100, 1, 10, 12000.00); -- Assume the total price for 10 units is 12000
 
--- Step 3: Verify the Inventory, Alerts, and PurchaseOrders tables for expected results
+		-- Step 3: Verify the Inventory, Alerts, and PurchaseOrders tables for expected results
 
--- Check the Inventory table to ensure the quantity was decremented
-SELECT * FROM Inventory WHERE product_id = 1;
+		-- Check the Inventory table to ensure the quantity was decremented
+		SELECT * FROM Inventory WHERE product_id = 1;
 
--- Check the Alerts table to ensure an alert was generated if the stock fell below the safe level
-SELECT * FROM Alerts WHERE entity_id = 1 AND entity_type = 'Product';
+		-- Check the Alerts table to ensure an alert was generated if the stock fell below the safe level
+		SELECT * FROM Alerts WHERE entity_id = 1 AND entity_type = 'Product';
 
--- Check the PurchaseOrders table to ensure a purchase order was created if needed
-SELECT * FROM PurchaseOrders WHERE status = 'Pending';
+		-- Check the PurchaseOrders table to ensure a purchase order was created if needed
+		SELECT * FROM PurchaseOrders WHERE status = 'Pending';
+
 
 -- 9. Find products with stock levels below the safe stock level to restock them on time
 drop PROCEDURE if exists GetLowStockProducts;
