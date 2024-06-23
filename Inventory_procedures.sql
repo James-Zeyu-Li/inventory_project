@@ -800,7 +800,7 @@ BEGIN
     ) AS ordered_transfers
     JOIN Products p ON ordered_transfers.product_id = p.product_id 
     WHERE 
-        ordered_transfers.row_order <= 3
+        ordered_transfers.row_order <= 4
     ORDER BY 
         ordered_transfers.warehouse_id, ordered_transfers.row_order;
 END //
