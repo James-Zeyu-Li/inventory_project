@@ -226,12 +226,7 @@ BEGIN
     END main_block;
 END//
 DELIMITER ;
-
-
-
 		-- Test cases for create_purchase_order
-
-		-- Error Code: 1146. Table 'inventory_mgmt.tempsuppliers' doesn't exist
 
 		-- Test 1: Sufficient inventory
 		CALL create_purchase_order(1, 10); 
@@ -265,10 +260,12 @@ DELIMITER ;
 		-- Verify Alerts table
 		SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
 
+
 -- Trigger to handle purchase order details insertion
 -- If a product is not in the product list, log a warning
 -- If in product list but not in inventory list, add to inventory list
 DROP TRIGGER IF EXISTS trg_after_insert_purchase_order_details;
+
 DELIMITER //
 
 CREATE TRIGGER trg_after_insert_purchase_order_details
@@ -305,9 +302,13 @@ BEGIN
         WHERE product_id = product_id_var AND warehouse_id = warehouse_id_var;
     END IF;
 END//
+
 DELIMITER ;
 
--- 3: Calculate the average price per product
+
+
+-- 3: Calculate the average price per product, 
+-- the the item not exist, add an alert to the alert chart, show message.
 DROP PROCEDURE IF EXISTS calculate_average_price_per_product;
 DELIMITER //
 
@@ -322,6 +323,7 @@ item_exist: BEGIN
 
     -- If the product does not exist, insert an alert and exit
     IF product_exists = 0 THEN
+		SELECT CONCAT('Alert: Product ID ', product_id_var, ' does not exist.') AS Warning;
         INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
         VALUES ('Product', product_id_var, CONCAT('Alert: Product ID ', product_id_var, ' does not exist.'), NOW());
         LEAVE item_exist;
@@ -362,12 +364,9 @@ item_exist: BEGIN
 END//
 DELIMITER ;
 
+-- Test case for a product that exists
 CALL calculate_average_price_per_product(1);
 
--- Test case for a product that exists
-DELIMITER //
-CALL calculate_average_price_per_product(1);
-DELIMITER ;
 
 -- Expected output:
 -- product_id: 1
@@ -375,10 +374,7 @@ DELIMITER ;
 -- average_purchase_price: calculated average price
 
 -- Test case for a product that does not exist
-DELIMITER //
 CALL calculate_average_price_per_product(999);
-DELIMITER ;
-
 -- Expected output:
 -- An alert should be inserted into the Alerts table indicating that the product does not exist
 
