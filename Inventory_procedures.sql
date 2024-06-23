@@ -28,16 +28,6 @@ DELIMITER ;
 -- Test the find_cheapest_suppliers procedure
 call find_cheapest_suppliers(8);
 
--- Expected output:
--- For product_id = 1
--- cheapest_supplier_id = 1
--- cheapest_catalog_id = 1
--- cheapest_price = 1150.00
-
--- For product_id = 2
--- cheapest_supplier_id = 4
--- cheapest_catalog_id = 4
--- cheapest_price = 750.00
 
 -- 2: check if inventory after PO will be larger than warehouse capacity
 -- if after PO the capacity is larger than the all warehouse capacity
@@ -88,7 +78,7 @@ BEGIN
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
     main_block: BEGIN
-            -- Ensure TempSuppliers table exists and is populated
+        -- Ensure TempSuppliers table exists and is populated
         DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
         CREATE TEMPORARY TABLE TempSuppliers AS
         SELECT supplier_id, catalog_id, price, max_quantity
@@ -100,9 +90,10 @@ BEGIN
         SELECT supplier_id INTO supplier_var
         FROM TempSuppliers
         LIMIT 1;
+        
         -- Create Purchase Order
         INSERT INTO PurchaseOrders (supplier_id, order_date, status, total_cost)
-        VALUES (supplier_var, CURDATE(), 'Add to Inventory', 0);
+        VALUES (supplier_var, CURDATE(), 'Pending', 0);
 
         SET po_var = LAST_INSERT_ID();
 
@@ -120,14 +111,6 @@ BEGIN
             warehouse_id INT,
             quantity INT
         );
-
-        -- Ensure TempSuppliers table exists and is populated
-        DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
-        CREATE TEMPORARY TABLE TempSuppliers AS
-        SELECT supplier_id, catalog_id, price, max_quantity
-        FROM Catalog
-        WHERE product_id = product_id_var
-        ORDER BY price;
 
         -- Open cursor to iterate through warehouses
         OPEN warehouse_cursor;
@@ -172,6 +155,12 @@ BEGIN
                                        quantity_var, ' units of product ID ', product_id_var, 
                                        '. PO rejected. Unallocated quantity: ', remaining_quantity);
             
+            -- Update the Purchase Order status to 'Rejected'
+            UPDATE PurchaseOrders
+            SET status = 'Rejected'
+            WHERE po_id = po_var;
+            
+            -- Add alert message
             INSERT INTO Alerts (entity_type, entity_id, message, alert_date)
             VALUES ('Product', product_id_var, alert_message, NOW());
 
@@ -205,7 +194,7 @@ BEGIN
 
             -- Update Purchase Order with total cost
             UPDATE PurchaseOrders
-            SET total_cost = total_cost
+            SET total_cost = total_cost, status = 'Add to Inventory'
             WHERE po_id = po_var;
 
             -- Update Inventory based on allocations with shelf space
@@ -238,6 +227,8 @@ BEGIN
 END//
 DELIMITER ;
 
+
+
 		-- Test cases for create_purchase_order
 
 		-- Error Code: 1146. Table 'inventory_mgmt.tempsuppliers' doesn't exist
@@ -263,7 +254,7 @@ DELIMITER ;
 		-- Expected result: PO created successfully, cheapest supplier selected, inventory updated, alert logged for successful PO creation
 
 		-- Verify PurchaseOrders table
-		SELECT * FROM PurchaseOrders ORDER BY po_id DESC LIMIT 1;
+		SELECT * FROM PurchaseOrders ORDER BY po_id DESC LIMIT 5;
 
 		-- Verify PurchaseOrderDetails table
 		SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC LIMIT 1;
