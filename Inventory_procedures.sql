@@ -5,44 +5,28 @@ DROP PROCEDURE IF EXISTS find_cheapest_suppliers;
 
 DELIMITER //
 CREATE PROCEDURE find_cheapest_suppliers(
-    IN p_product_id INT,
-    OUT p_cheapest_supplier_id INT,
-    OUT p_cheapest_catalog_id INT,
-    OUT p_cheapest_price DECIMAL(10, 2)
+    IN p_product_id INT
 )
 BEGIN
+    -- Ensure TempSuppliers table is dropped if it exists
     DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
-    
-    -- Find supplier and catalog
-    SELECT supplier_id, catalog_id, price
-    INTO p_cheapest_supplier_id, p_cheapest_catalog_id, p_cheapest_price
-    FROM Catalog
-    WHERE product_id = p_product_id
-    ORDER BY price
-    LIMIT 1;
-    
-    -- List all result in temporary table sort by price
+
+    -- Create a temporary table to list all suppliers sorted by price
     CREATE TEMPORARY TABLE TempSuppliers AS
     SELECT supplier_id, catalog_id, price, max_quantity
     FROM Catalog
     WHERE product_id = p_product_id
     ORDER BY price;
+
+    -- Select the cheapest supplier and catalog for the given product
+    SELECT supplier_id, catalog_id, price
+    FROM TempSuppliers
+    ORDER BY price;
 END//
 DELIMITER ;
 
 -- Test the find_cheapest_suppliers procedure
-
--- Test for product 1
-DELIMITER //
-CALL find_cheapest_suppliers(1, @cheapest_supplier_id1, @cheapest_catalog_id1, @cheapest_price1);
-SELECT @cheapest_supplier_id1 AS cheapest_supplier_id, @cheapest_catalog_id1 AS cheapest_catalog_id, @cheapest_price1 AS cheapest_price;
-DELIMITER ;
-
--- Test for product 2
-DELIMITER //
-CALL find_cheapest_suppliers(2, @cheapest_supplier_id2, @cheapest_catalog_id2, @cheapest_price2);
-SELECT @cheapest_supplier_id2 AS cheapest_supplier_id, @cheapest_catalog_id2 AS cheapest_catalog_id, @cheapest_price2 AS cheapest_price;
-DELIMITER ;
+call find_cheapest_suppliers(8);
 
 -- Expected output:
 -- For product_id = 1
@@ -104,7 +88,7 @@ BEGIN
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
     main_block: BEGIN
-        -- Ensure TempSuppliers table exists and is populated
+            -- Ensure TempSuppliers table exists and is populated
         DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
         CREATE TEMPORARY TABLE TempSuppliers AS
         SELECT supplier_id, catalog_id, price, max_quantity
@@ -116,7 +100,6 @@ BEGIN
         SELECT supplier_id INTO supplier_var
         FROM TempSuppliers
         LIMIT 1;
-
         -- Create Purchase Order
         INSERT INTO PurchaseOrders (supplier_id, order_date, status, total_cost)
         VALUES (supplier_var, CURDATE(), 'Add to Inventory', 0);
@@ -137,6 +120,14 @@ BEGIN
             warehouse_id INT,
             quantity INT
         );
+
+        -- Ensure TempSuppliers table exists and is populated
+        DROP TEMPORARY TABLE IF EXISTS TempSuppliers;
+        CREATE TEMPORARY TABLE TempSuppliers AS
+        SELECT supplier_id, catalog_id, price, max_quantity
+        FROM Catalog
+        WHERE product_id = product_id_var
+        ORDER BY price;
 
         -- Open cursor to iterate through warehouses
         OPEN warehouse_cursor;
@@ -247,41 +238,41 @@ BEGIN
 END//
 DELIMITER ;
 
--- Test cases for create_purchase_order
+		-- Test cases for create_purchase_order
 
+		-- Error Code: 1146. Table 'inventory_mgmt.tempsuppliers' doesn't exist
 
-	-- Test cases for create_purchase_order
-	-- Test 1: Sufficient inventory
-	CALL create_purchase_order(1, 10); 
-	-- Expected result: PO created successfully, inventory updated, alert logged for successful PO creation
+		-- Test 1: Sufficient inventory
+		CALL create_purchase_order(1, 10); 
+		-- Expected result: PO created successfully, inventory updated, alert logged for successful PO creation
 
-	-- Test 2: Insufficient inventory
-	CALL create_purchase_order(1, 100000); 
-	-- Expected result: PO creation failed, alert logged for insufficient inventory
+		-- Test 2: Insufficient inventory
+		CALL create_purchase_order(1, 100000); 
+		-- Expected result: PO creation failed, alert logged for insufficient inventory
 
-	-- Test 3: Partial inventory allocation
-	CALL create_purchase_order(2, 500); 
-	-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
+		-- Test 3: Partial inventory allocation
+		CALL create_purchase_order(2, 500); 
+		-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
 
-	-- Test 4: Single warehouse insufficient, total inventory sufficient
-	CALL create_purchase_order(3, 15); 
-	-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
+		-- Test 4: Single warehouse insufficient, total inventory sufficient
+		CALL create_purchase_order(3, 15); 
+		-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
 
-	-- Test 5: Check cheapest supplier selection
-	CALL create_purchase_order(4, 5); 
-	-- Expected result: PO created successfully, cheapest supplier selected, inventory updated, alert logged for successful PO creation
+		-- Test 5: Check cheapest supplier selection
+		CALL create_purchase_order(4, 5); 
+		-- Expected result: PO created successfully, cheapest supplier selected, inventory updated, alert logged for successful PO creation
 
-	-- Verify PurchaseOrders table
-	SELECT * FROM PurchaseOrders ORDER BY po_id DESC;
+		-- Verify PurchaseOrders table
+		SELECT * FROM PurchaseOrders ORDER BY po_id DESC LIMIT 1;
 
-	-- Verify PurchaseOrderDetails table
-	SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC;
+		-- Verify PurchaseOrderDetails table
+		SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC LIMIT 1;
 
-	-- Verify Inventory table
-	SELECT * FROM Inventory WHERE product_id = 1;
+		-- Verify Inventory table
+		SELECT * FROM Inventory WHERE product_id = 1;
 
-	-- Verify Alerts table
-	SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
+		-- Verify Alerts table
+		SELECT * FROM Alerts ORDER BY alert_id DESC LIMIT 1;
 
 -- Trigger to handle purchase order details insertion
 -- If a product is not in the product list, log a warning
