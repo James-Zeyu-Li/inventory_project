@@ -1,3 +1,4 @@
+USE inventory_mgmt;
 DELIMITER $$
 CREATE DEFINER=`root`@`localhost` PROCEDURE `calculate_average_price_per_product`(IN product_id_var INT)
 item_exist: BEGIN
