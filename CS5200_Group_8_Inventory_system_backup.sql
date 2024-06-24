@@ -1,3 +1,5 @@
+CREATE DATABASE  IF NOT EXISTS `inventory_mgmt` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `inventory_mgmt`;
 -- MySQL dump 10.13  Distrib 8.0.36, for macos14 (arm64)
 --
 -- Host: localhost    Database: inventory_mgmt
