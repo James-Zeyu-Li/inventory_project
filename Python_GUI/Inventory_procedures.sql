@@ -237,7 +237,7 @@ DELIMITER ;
 		-- Expected result: PO creation failed, alert logged for insufficient inventory
 
 		-- Test 3: Partial inventory allocation
-		CALL create_purchase_order(2, 500); 
+		CALL create_purchase_order(2, 200); 
 		-- Expected result: PO created successfully, quantities allocated to multiple warehouses, inventory updated, alert logged for successful PO creation
 
 		-- Test 4: Single warehouse insufficient, total inventory sufficient
@@ -252,7 +252,7 @@ DELIMITER ;
 		SELECT * FROM PurchaseOrders ORDER BY po_id DESC LIMIT 5;
 
 		-- Verify PurchaseOrderDetails table
-		SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC LIMIT 1;
+		SELECT * FROM PurchaseOrderDetails ORDER BY pod_id DESC LIMIT 5;
 
 		-- Verify Inventory table
 		SELECT * FROM Inventory WHERE product_id = 1;
@@ -636,6 +636,8 @@ DELIMITER ;
 
 		-- Expected result:
 		-- Confirm that a new purchase order was created to replenish the stock for product ID 1 (Laptop).
+
+
 
 
 -- 8: Trigger to check inventory after update and suggest a purchase order if needed
