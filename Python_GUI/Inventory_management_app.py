@@ -1,3 +1,9 @@
+# Please install the necessary package first
+# pip install PyQt5
+# pip install PyQt5 mysql-connector-python Pillow
+# pip install mysql.connector
+
+
 import os
 import sys
 import sqlite3
@@ -17,7 +23,8 @@ class ProductApp(QMainWindow):
         self.db_config = {
             'host': 'localhost',
             'user': 'root',
-            'password': 'jinzhaolee',
+            # Password needs to entered to connect to the server.
+            'password': '',
             'database': 'inventory_mgmt'
         }
         self.conn = mysql.connector.connect(**self.db_config)
@@ -52,8 +59,10 @@ class ProductApp(QMainWindow):
     def create_database(self):
         # 获取脚本所在目录
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        create_db_sql_file_path = os.path.join(script_dir, 'Inventory_system.sql')
-        procedures_sql_file_path = os.path.join(script_dir, 'Inventory_procedures.sql')
+        create_db_sql_file_path = os.path.join(
+            script_dir, 'Inventory_system.sql')
+        procedures_sql_file_path = os.path.join(
+            script_dir, 'Inventory_procedures.sql')
 
         # 连接到MySQL服务器
         server_config = self.db_config.copy()
@@ -62,14 +71,16 @@ class ProductApp(QMainWindow):
         with mysql.connector.connect(**server_config) as conn:
             with conn.cursor() as cursor:
                 # 加载并执行创建数据库的SQL文件
-                create_db_sql_script = self.load_sql_script(create_db_sql_file_path)
+                create_db_sql_script = self.load_sql_script(
+                    create_db_sql_file_path)
                 self.execute_sql_script(cursor, create_db_sql_script)
 
                 # 切换到新创建的数据库
                 cursor.execute(f"USE {self.db_config['database']}")
 
                 # 加载并执行存储过程的SQL文件
-                procedures_sql_script = self.load_sql_script(procedures_sql_file_path)
+                procedures_sql_script = self.load_sql_script(
+                    procedures_sql_file_path)
                 # 手动处理存储过程定义
                 for statement in procedures_sql_script.split('DELIMITER //'):
                     if statement.strip():
@@ -164,7 +175,8 @@ class ProductApp(QMainWindow):
         input_layout.addWidget(self.buy_quantity_input, 1, 1)
         # input_layout.addWidget(buy_warehouse_label, 2, 0)
         # input_layout.addWidget(self.buy_warehouse_input, 2, 1)
-        input_layout.addWidget(buy_button, 0, 2, 3, 1, alignment=Qt.AlignCenter)
+        input_layout.addWidget(buy_button, 0, 2, 3, 1,
+                               alignment=Qt.AlignCenter)
 
         # 卖出布局
         sell_id_label = QLabel('Product ID', self)
@@ -183,7 +195,8 @@ class ProductApp(QMainWindow):
         input_layout.addWidget(self.sell_quantity_input, 1, 4)
         input_layout.addWidget(sell_customer_label, 2, 3)
         input_layout.addWidget(self.sell_customer_input, 2, 4)
-        input_layout.addWidget(sell_button, 0, 5, 3, 1, alignment=Qt.AlignCenter)
+        input_layout.addWidget(sell_button, 0, 5, 3, 1,
+                               alignment=Qt.AlignCenter)
 
         left_layout.addLayout(input_layout)
 
@@ -202,7 +215,7 @@ class ProductApp(QMainWindow):
         ]
         button_names = [
             'Refresh', 'Boss Key', 'Catalog Management', 'Order Management',
-            'Most frequently\ntransferred products', 'Monthly\ninventory changes','Low\ninventory products', 'Order Management',
+            'Most frequently\ntransferred products', 'Monthly\ninventory changes', 'Low\ninventory products', 'Order Management',
             'Refresh', 'Boss Key', 'Catalog Management', 'Order Management',
             'Refresh', 'Boss Key', 'Catalog Management', 'Order Management',
             'Refresh', 'Boss Key', 'Catalog Management', 'Order Management'
@@ -278,7 +291,8 @@ class ProductApp(QMainWindow):
     def handle_error(self, error):
         # 提取错误消息并显示
         error_message = str(error)
-        QMessageBox.critical(self, 'Database Error', error_message, QMessageBox.Ok)
+        QMessageBox.critical(self, 'Database Error',
+                             error_message, QMessageBox.Ok)
 
     # +++++++++++++++++++++++++++ 功能区 ++++++++++++++++++++++++++++++++++
     # +++++++++++++++++++++++++++ 功能区 ++++++++++++++++++++++++++++++++++
@@ -305,17 +319,20 @@ class ProductApp(QMainWindow):
 
     def show_most_transferred_products(self):
         conn, db_config = self.get_db_connection()
-        self.most_transferred_products_window = MostTransferredProductsWindow(conn, db_config)
+        self.most_transferred_products_window = MostTransferredProductsWindow(
+            conn, db_config)
         self.most_transferred_products_window.show()
 
     def show_monthly_inventory_changes(self):
         conn, db_config = self.get_db_connection()
-        self.monthly_inventory_changes_window = MonthlyInventoryChangesWindow(conn, db_config)
+        self.monthly_inventory_changes_window = MonthlyInventoryChangesWindow(
+            conn, db_config)
         self.monthly_inventory_changes_window.show()
 
     def show_low_stock_products(self):
         conn, db_config = self.get_db_connection()
-        self.low_stock_products_window = LowStockProductsWindow(conn, db_config)
+        self.low_stock_products_window = LowStockProductsWindow(
+            conn, db_config)
         self.low_stock_products_window.show()
 
     def buy_product(self):
@@ -350,7 +367,8 @@ class ProductApp(QMainWindow):
             po_var = cursor.lastrowid
 
             # Get product shelf space
-            cursor.execute('SELECT shelf_space FROM Products WHERE product_id = %s;', (product_id,))
+            cursor.execute(
+                'SELECT shelf_space FROM Products WHERE product_id = %s;', (product_id,))
             product_shelf_space = cursor.fetchone()[0]
 
             # Initialize remaining quantity
@@ -367,7 +385,8 @@ class ProductApp(QMainWindow):
             cursor.fetchall()  # 清空结果集
 
             # Open cursor to iterate through warehouses
-            cursor.execute('SELECT warehouse_id, capacity FROM Warehouses ORDER BY capacity DESC;')
+            cursor.execute(
+                'SELECT warehouse_id, capacity FROM Warehouses ORDER BY capacity DESC;')
             warehouses = cursor.fetchall()
 
             for warehouse in warehouses:
@@ -383,18 +402,19 @@ class ProductApp(QMainWindow):
                 current_warehouse_used_capacity = cursor.fetchone()[0]
 
                 # Calculate how much can be allocated to this warehouse
-                allocatable_quantity = (current_warehouse_capacity - current_warehouse_used_capacity) // product_shelf_space
+                allocatable_quantity = (
+                    current_warehouse_capacity - current_warehouse_used_capacity) // product_shelf_space
 
                 if allocatable_quantity > 0:
                     if allocatable_quantity >= remaining_quantity:
                         cursor.execute('INSERT INTO temp_allocations (warehouse_id, quantity) VALUES (%s, %s);',
-                                    (current_warehouse_id, remaining_quantity))
+                                       (current_warehouse_id, remaining_quantity))
                         conn.commit()
                         remaining_quantity = 0
                         break
                     else:
                         cursor.execute('INSERT INTO temp_allocations (warehouse_id, quantity) VALUES (%s, %s);',
-                                    (current_warehouse_id, allocatable_quantity))
+                                       (current_warehouse_id, allocatable_quantity))
                         conn.commit()
                         remaining_quantity -= allocatable_quantity
 
@@ -421,7 +441,8 @@ class ProductApp(QMainWindow):
             # Allocate the quantities from suppliers
             total_cost = 0
             remaining_quantity = quantity
-            cursor.execute('SELECT supplier_id, catalog_id, price, max_quantity FROM TempSuppliers;')
+            cursor.execute(
+                'SELECT supplier_id, catalog_id, price, max_quantity FROM TempSuppliers;')
             suppliers = cursor.fetchall()
 
             for supplier in suppliers:
@@ -489,7 +510,8 @@ class ProductApp(QMainWindow):
         cursor = conn.cursor()
 
         try:
-            cursor.callproc('process_sales_order', [order_id, product_id, quantity])
+            cursor.callproc('process_sales_order', [
+                            order_id, product_id, quantity])
             conn.commit()
 
             # 获取存储过程的结果
@@ -630,7 +652,8 @@ class ProductListWindow(QDialog):
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(['ID', 'Name', 'Description', 'Market Price', 'Safe Stock Lv', 'Healthy Stock Lv', 'Shelf Space'])
+        self.table.setHorizontalHeaderLabels(
+            ['ID', 'Name', 'Description', 'Market Price', 'Safe Stock Lv', 'Healthy Stock Lv', 'Shelf Space'])
 
         # 设置每列的宽度
         self.table.setColumnWidth(0, 50)   # ID列
@@ -655,7 +678,8 @@ class ProductListWindow(QDialog):
         for row in rows:
             self.table.insertRow(self.table.rowCount())
             for col, data in enumerate(row):
-                self.table.setItem(self.table.rowCount() - 1, col, QTableWidgetItem(str(data)))
+                self.table.setItem(self.table.rowCount() - 1,
+                                   col, QTableWidgetItem(str(data)))
 
         cursor.close()
 
@@ -674,8 +698,9 @@ class StockListWindow(QDialog):
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(['Product ID', 'Product Name', 'Warehouse ID', 'Quantity', 'Shelf Space', 'Catalog ID', 'Price'])
-        
+        self.table.setHorizontalHeaderLabels(
+            ['Product ID', 'Product Name', 'Warehouse ID', 'Quantity', 'Shelf Space', 'Catalog ID', 'Price'])
+
         # 设置每列的宽度
         self.table.setColumnWidth(0, 100)  # Product ID列
         self.table.setColumnWidth(1, 150)  # Product Name列
@@ -712,7 +737,8 @@ class StockListWindow(QDialog):
         for row in rows:
             self.table.insertRow(self.table.rowCount())
             for col, data in enumerate(row):
-                self.table.setItem(self.table.rowCount() - 1, col, QTableWidgetItem(str(data)))
+                self.table.setItem(self.table.rowCount() - 1,
+                                   col, QTableWidgetItem(str(data)))
 
         cursor.close()
 
@@ -731,7 +757,8 @@ class CatalogListWindow(QDialog):
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(['ID', 'Product Name', 'Description', 'Supplier Name', 'Max Quantity', 'Selling Price'])
+        self.table.setHorizontalHeaderLabels(
+            ['ID', 'Product Name', 'Description', 'Supplier Name', 'Max Quantity', 'Selling Price'])
 
         # 设置每列的宽度
         self.table.setColumnWidth(0, 50)   # ID列
@@ -767,7 +794,8 @@ class CatalogListWindow(QDialog):
         for row in rows:
             self.table.insertRow(self.table.rowCount())
             for col, data in enumerate(row):
-                self.table.setItem(self.table.rowCount() - 1, col, QTableWidgetItem(str(data)))
+                self.table.setItem(self.table.rowCount() - 1,
+                                   col, QTableWidgetItem(str(data)))
 
         cursor.close()
 
@@ -786,8 +814,9 @@ class OrderListWindow(QDialog):
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(9)
-        self.table.setHorizontalHeaderLabels(['Order ID', 'Customer Name', 'Order Date', 'Total Price', 'Delivery Date', 'Status', 'Product Name', 'Quantity', 'Unit price'])
-        
+        self.table.setHorizontalHeaderLabels(['Order ID', 'Customer Name', 'Order Date',
+                                             'Total Price', 'Delivery Date', 'Status', 'Product Name', 'Quantity', 'Unit price'])
+
         # 设置每列的宽度
         self.table.setColumnWidth(0, 100)  # Order ID列
         self.table.setColumnWidth(1, 150)  # Customer Name列
@@ -829,7 +858,8 @@ class OrderListWindow(QDialog):
         for row in rows:
             self.table.insertRow(self.table.rowCount())
             for col, data in enumerate(row):
-                self.table.setItem(self.table.rowCount() - 1, col, QTableWidgetItem(str(data)))
+                self.table.setItem(self.table.rowCount() - 1,
+                                   col, QTableWidgetItem(str(data)))
 
         cursor.close()
 
@@ -848,7 +878,8 @@ class MostTransferredProductsWindow(QDialog):
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(['Warehouse ID', 'Product ID', 'Total Transferred', 'Product Name'])
+        self.table.setHorizontalHeaderLabels(
+            ['Warehouse ID', 'Product ID', 'Total Transferred', 'Product Name'])
 
         # 设置每列的宽度
         self.table.setColumnWidth(0, 150)  # Warehouse ID列
@@ -909,7 +940,8 @@ class MostTransferredProductsWindow(QDialog):
         for row in rows:
             self.table.insertRow(self.table.rowCount())
             for col, data in enumerate(row):
-                self.table.setItem(self.table.rowCount() - 1, col, QTableWidgetItem(str(data)))
+                self.table.setItem(self.table.rowCount() - 1,
+                                   col, QTableWidgetItem(str(data)))
 
         cursor.close()
 
@@ -928,7 +960,8 @@ class MonthlyInventoryChangesWindow(QDialog):
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(['Warehouse ID', 'Product ID', 'Month and Year', 'Quantity Change', 'Product Name'])
+        self.table.setHorizontalHeaderLabels(
+            ['Warehouse ID', 'Product ID', 'Month and Year', 'Quantity Change', 'Product Name'])
 
         # 设置每列的宽度
         self.table.setColumnWidth(0, 150)  # Warehouse ID列
@@ -973,7 +1006,8 @@ class MonthlyInventoryChangesWindow(QDialog):
         for row in rows:
             self.table.insertRow(self.table.rowCount())
             for col, data in enumerate(row):
-                self.table.setItem(self.table.rowCount() - 1, col, QTableWidgetItem(str(data)))
+                self.table.setItem(self.table.rowCount() - 1,
+                                   col, QTableWidgetItem(str(data)))
 
         cursor.close()
 
@@ -992,7 +1026,8 @@ class LowStockProductsWindow(QDialog):
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(['Product ID', 'Product Name', 'Safe Stock Level', 'Current Stock', 'Restock Needed'])
+        self.table.setHorizontalHeaderLabels(
+            ['Product ID', 'Product Name', 'Safe Stock Level', 'Current Stock', 'Restock Needed'])
 
         # 设置每列的宽度
         self.table.setColumnWidth(0, 150)  # Product ID列
@@ -1030,7 +1065,8 @@ class LowStockProductsWindow(QDialog):
         for row in rows:
             self.table.insertRow(self.table.rowCount())
             for col, data in enumerate(row):
-                self.table.setItem(self.table.rowCount() - 1, col, QTableWidgetItem(str(data)))
+                self.table.setItem(self.table.rowCount() - 1,
+                                   col, QTableWidgetItem(str(data)))
 
         cursor.close()
 
